@@ -27,7 +27,7 @@ export function Sidebar({
   const visiblePlaylists = isLogin ? accountPlaylists : [];
 
   return (
-    <aside className="flex w-[244px] shrink-0 flex-col bg-neutral-950 text-neutral-300">
+    <aside className="flex w-[244px] shrink-0 flex-col bg-[#171717] text-neutral-300">
       <button type="button" className="flex h-24 cursor-pointer items-center gap-3 px-5 text-left" onClick={isLogin ? undefined : onLogin}>
         {user?.avatar ? (
           <img src={user.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
