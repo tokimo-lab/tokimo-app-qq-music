@@ -82,8 +82,8 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
                 ref={(node) => {
                   lineRefs.current[index] = node;
                 }}
-                className={`py-2 leading-relaxed transition-all duration-300 ${
-                  index === activeIndex ? "scale-105 text-4xl font-semibold text-emerald-500" : "text-2xl opacity-70"
+                className={`py-2 text-2xl leading-relaxed transition-all duration-300 ${
+                  index === activeIndex ? "scale-[1.08] font-semibold text-emerald-500" : "opacity-70"
                 }`}
               >
                 {line.text}
