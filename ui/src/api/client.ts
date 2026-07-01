@@ -71,3 +71,7 @@ export const api = {
 export function audioUrl(songmid: string): string {
   return `${BASE}/audio/${encodeURIComponent(songmid)}`;
 }
+
+export function imageProxyUrl(url: string): string {
+  return `${BASE}/image-proxy${params({ url })}`;
+}

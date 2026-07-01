@@ -22,16 +22,34 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
   const totalMs = active?.durationMs || current?.durationMs || 0;
   const progress = totalMs > 0 ? Math.min(100, (currentMs / totalMs) * 100) : 0;
 
-  function handleSeek(event: React.MouseEvent<HTMLDivElement>) {
+  function seekFromClientX(target: HTMLDivElement, clientX: number) {
     if (totalMs <= 0) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const rect = target.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     onSeek(ratio * totalMs);
+  }
+
+  function handleSeekPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    seekFromClientX(event.currentTarget, event.clientX);
+  }
+
+  function handleSeekPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if ((event.buttons & 1) === 0) return;
+    seekFromClientX(event.currentTarget, event.clientX);
   }
 
   return (
     <footer className="flex h-[88px] shrink-0 items-center rounded-[14px] bg-[#181818] px-5 text-neutral-200">
-      <button type="button" className="flex w-[300px] min-w-0 max-w-[34%] shrink cursor-pointer items-center gap-3 text-left" onClick={onNowPlaying}>
+      <div
+        className="flex w-[300px] min-w-0 max-w-[34%] shrink cursor-pointer items-center gap-3 text-left"
+        role="button"
+        tabIndex={0}
+        onClick={onNowPlaying}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onNowPlaying();
+        }}
+      >
         {current?.artworkUrl ? (
           <img src={current.artworkUrl} alt="" className="h-14 w-14 rounded object-cover" />
         ) : (
@@ -55,7 +73,7 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
             <MoreHorizontal className="h-4 w-4" />
           </div>
         </div>
-      </button>
+      </div>
 
       <div className="flex min-w-[260px] flex-1 flex-col items-center justify-center px-5">
         <div className="flex items-center gap-7">
@@ -81,7 +99,7 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
         </div>
         <div className="mt-3 flex w-full max-w-[520px] items-center gap-3">
           <span className="w-10 text-right text-xs tabular-nums text-neutral-500">{duration(currentMs)}</span>
-          <div className="h-4 flex-1 cursor-pointer py-[7px]" onClick={handleSeek}>
+          <div className="h-4 flex-1 cursor-pointer touch-none py-[7px]" onPointerDown={handleSeekPointerDown} onPointerMove={handleSeekPointerMove}>
             <div className="h-1 rounded-full bg-neutral-700">
               <div className="h-1 rounded-full bg-white" style={{ width: `${progress}%` }} />
             </div>

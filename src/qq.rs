@@ -401,6 +401,10 @@ impl QqClient {
         self.with_qq_headers(self.client.get(url), None)
     }
 
+    pub fn image_request(&self, url: &str) -> RequestBuilder {
+        self.with_qq_headers(self.client.get(url), None)
+    }
+
     fn with_qq_headers(&self, mut builder: RequestBuilder, cookie_header: Option<&str>) -> RequestBuilder {
         builder = builder
             .header(header::REFERER, REFERER)

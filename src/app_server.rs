@@ -43,6 +43,7 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/recommend/playlists", get(handlers::recommend_playlists))
         .route("/playlists/{id}", get(handlers::playlist_detail))
         .route("/audio/{songmid}", get(handlers::audio))
+        .route("/image-proxy", get(handlers::image_proxy))
         .route("/lyrics/{songmid}", get(handlers::lyrics))
         .route("/assets/{*path}", get(assets::serve))
         .with_state(ctx)

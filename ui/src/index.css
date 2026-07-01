@@ -16,3 +16,13 @@
   background: rgb(82 82 82 / 0.75);
   border-radius: 999px;
 }
+
+@keyframes qq-disc-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

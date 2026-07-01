@@ -119,6 +119,11 @@ pub struct UnlikeSongParams {
     pub song_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct ImageProxyParams {
+    pub url: String,
+}
+
 fn default_recommend_limit() -> u32 {
     18
 }
@@ -308,4 +313,57 @@ pub async fn audio(
 
     let stream = resp.bytes_stream().map_err(std::io::Error::other);
     Ok(builder.body(Body::from_stream(stream)).unwrap().into_response())
+}
+
+pub async fn image_proxy(
+    State(ctx): State<Arc<AppCtx>>,
+    Query(params): Query<ImageProxyParams>,
+) -> Result<Response, AppError> {
+    if !is_allowed_qq_image_url(&params.url) {
+        return Err(AppError::bad_request("unsupported image url"));
+    }
+
+    let resp = ctx.qq.image_request(&params.url).send().await?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Upstream {
+            status: StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            body,
+        });
+    }
+
+    let content_type = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    if !content_type.starts_with("image/") {
+        return Err(AppError::bad_request("upstream response is not an image"));
+    }
+
+    let mut builder = Response::builder()
+        .status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK))
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=86400");
+
+    if let Some(value) = resp.headers().get(header::CONTENT_LENGTH) {
+        builder = builder.header(header::CONTENT_LENGTH, value.clone());
+    }
+
+    let stream = resp.bytes_stream().map_err(std::io::Error::other);
+    Ok(builder.body(Body::from_stream(stream)).unwrap().into_response())
+}
+
+fn is_allowed_qq_image_url(value: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(value) else {
+        return false;
+    };
+    if url.scheme() != "https" {
+        return false;
+    }
+    matches!(
+        url.host_str(),
+        Some("y.gtimg.cn" | "p.qpic.cn" | "qpic.y.qq.com" | "thirdqq.qlogo.cn" | "thirdwx.qlogo.cn")
+    )
 }
