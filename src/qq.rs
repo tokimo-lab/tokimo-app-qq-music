@@ -890,11 +890,7 @@ fn values_to_strings(value: Option<&Value>) -> Vec<String> {
         Some(Value::Object(items)) => {
             let mut keyed = items
                 .iter()
-                .filter_map(|(key, value)| {
-                    key.parse::<usize>()
-                        .ok()
-                        .and_then(|index| value_to_string(value).map(|item| (index, item)))
-                })
+                .filter_map(|(key, value)| key.parse::<usize>().ok().zip(value_to_string(value)))
                 .collect::<Vec<_>>();
             keyed.sort_by_key(|(index, _)| *index);
             keyed.into_iter().map(|(_, item)| item).collect()
