@@ -44,7 +44,7 @@ export function PlaylistView({
   }
 
   return (
-    <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-16 pb-10" onScroll={handleScroll}>
+    <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-4 pb-10" onScroll={handleScroll}>
       <div data-playlist-sticky="true" className="sticky top-0 z-20 -mx-10 bg-[#1e1e1e] px-10 pt-4 pb-2">
         <div className="flex min-w-0 items-start gap-7">
           {detail.info.coverImgUrl ? (

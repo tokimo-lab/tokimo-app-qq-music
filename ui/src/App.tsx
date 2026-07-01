@@ -191,8 +191,8 @@ export default function App() {
         onSearchFocus={() => searchRef.current?.focus()}
       />
       <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-[#121212] p-3 pl-0">
-        <section className="relative min-h-0 flex-1 overflow-hidden rounded-[14px] bg-[#1e1e1e]">
-          <header className="absolute top-0 right-0 left-0 z-10 flex h-16 items-center gap-5 bg-[#1e1e1e]/90 px-10 backdrop-blur">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] bg-[#1e1e1e]">
+          <header className="flex h-16 shrink-0 items-center gap-5 bg-[#1e1e1e] px-10">
             <ChevronLeft className="h-7 w-7 text-neutral-500" />
             <ChevronRight className="h-7 w-7 text-neutral-700" />
             <form className="relative w-[320px]" onSubmit={(event) => void doSearch(event)}>
@@ -210,32 +210,34 @@ export default function App() {
             </div>
           </header>
 
-          {view === "home" ? (
-            <HomeView recommended={recommended} onOpenPlaylist={(id) => void openPlaylist(id)} onLogin={() => setLoginOpen(true)} />
-          ) : view === "playlist" ? (
-            <PlaylistView
-              detail={playlist}
-              loading={playlistLoading}
-              error={playlistError}
-              currentSongmid={currentSongmid}
-              isPlaying={activeSnapshot?.isPlaying ?? false}
-              onPlayAll={() => void playSongs(playlist?.tracks ?? [], 0)}
-              onPlayTrack={(index) => void playSongs(playlist?.tracks ?? [], index)}
-              onPause={() => mediaApi?.pause()}
-            />
-          ) : (
-            <SearchView
-              query={query}
-              results={searchResults}
-              loading={searchLoading}
-              error={searchError}
-              currentSongmid={currentSongmid}
-              isPlaying={activeSnapshot?.isPlaying ?? false}
-              onPlaySong={(index) => void playSongs(searchResults?.songs ?? [], index)}
-              onPause={() => mediaApi?.pause()}
-              onOpenPlaylist={(id) => void openPlaylist(id)}
-            />
-          )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {view === "home" ? (
+              <HomeView recommended={recommended} onOpenPlaylist={(id) => void openPlaylist(id)} onLogin={() => setLoginOpen(true)} />
+            ) : view === "playlist" ? (
+              <PlaylistView
+                detail={playlist}
+                loading={playlistLoading}
+                error={playlistError}
+                currentSongmid={currentSongmid}
+                isPlaying={activeSnapshot?.isPlaying ?? false}
+                onPlayAll={() => void playSongs(playlist?.tracks ?? [], 0)}
+                onPlayTrack={(index) => void playSongs(playlist?.tracks ?? [], index)}
+                onPause={() => mediaApi?.pause()}
+              />
+            ) : (
+              <SearchView
+                query={query}
+                results={searchResults}
+                loading={searchLoading}
+                error={searchError}
+                currentSongmid={currentSongmid}
+                isPlaying={activeSnapshot?.isPlaying ?? false}
+                onPlaySong={(index) => void playSongs(searchResults?.songs ?? [], index)}
+                onPause={() => mediaApi?.pause()}
+                onOpenPlaylist={(id) => void openPlaylist(id)}
+              />
+            )}
+          </div>
         </section>
 
         <PlayerBar

@@ -5,6 +5,7 @@
 .qq-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgb(82 82 82 / 0.75) transparent;
+  overflow-anchor: none;
 }
 
 .qq-scrollbar::-webkit-scrollbar {
@@ -15,4 +16,3 @@
   background: rgb(82 82 82 / 0.75);
   border-radius: 999px;
 }
-

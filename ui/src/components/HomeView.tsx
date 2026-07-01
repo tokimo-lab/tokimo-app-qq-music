@@ -14,7 +14,7 @@ export function HomeView({ recommended, onOpenPlaylist, onLogin }: HomeViewProps
   const privatePicks = recommended.slice(4, 12);
 
   return (
-    <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-24 pb-10">
+    <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-8 pb-10">
       <div className="mb-10 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-neutral-100">hi 今日为你推荐</h1>
         <button type="button" className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-base text-neutral-500 hover:text-neutral-300" onClick={onLogin}>

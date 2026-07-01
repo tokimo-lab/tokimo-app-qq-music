@@ -26,7 +26,7 @@ export function SearchView({
   onOpenPlaylist,
 }: SearchViewProps) {
   return (
-    <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-16 pb-10">
+    <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-8 pb-10">
       <h1 className="text-3xl font-semibold text-neutral-100">搜索音乐</h1>
       <p className="mt-2 text-sm text-neutral-500">{query ? `“${query}” 的搜索结果` : "在顶部输入关键词搜索歌曲和歌单"}</p>
       {loading && <State text="搜索中" />}
