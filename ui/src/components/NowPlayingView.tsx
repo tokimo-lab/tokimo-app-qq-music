@@ -10,7 +10,7 @@ import {
   SkipForward,
   Waves,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { imageProxyUrl } from "../api/client";
 import type { AudioQualityId, LyricsResp, SongDto } from "../types/domain";
 import { duration } from "./format";
@@ -61,6 +61,8 @@ export function NowPlayingView({
 }: NowPlayingViewProps) {
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
+  const tonearmRef = useRef<HTMLDivElement | null>(null);
+  const tonearmState = useTonearmPlaybackState(isPlaying, tonearmRef);
   const reportedCurrentMs = active?.currentTimeMs ?? 0;
   const totalMs = active?.durationMs ?? current?.durationMs ?? 0;
   const currentMs = useSmoothPlaybackTime(reportedCurrentMs, isPlaying, totalMs, current?.songmid);
@@ -119,6 +121,7 @@ export function NowPlayingView({
     onSetQueue,
     onClearQueue,
     onToggleLike,
+    onToggle,
     iconClass: "h-[24px] w-[24px]",
   };
 
@@ -279,15 +282,23 @@ export function NowPlayingView({
               }}
             >
               {artworkUrl && <img src={artworkUrl} alt="" className="h-full w-full rounded-full object-cover" />}
-              <div className="absolute inset-[40%] rounded-full bg-[#2f271f]" />
             </div>
           </div>
-          <div className="absolute left-[233px] top-[-11px] h-[35px] w-[18px] rounded-[4px] bg-gradient-to-b from-[#8f9294] via-[#e9e9e9] to-[#747677] shadow-[0_3px_5px_rgba(0,0,0,0.24)]" />
-          <div className="absolute left-[242px] top-[18px] h-[190px] w-[6px] origin-top rotate-[1.5deg] rounded-full bg-gradient-to-b from-[#f8f8f8] via-[#b7bab8] to-[#6f706d] shadow-[5px_3px_8px_rgba(0,0,0,0.20)]" />
+          <div
+            ref={tonearmRef}
+            className={`qq-tonearm ${tonearmState.playing ? "qq-tonearm--playing" : "qq-tonearm--resting"} ${
+              tonearmState.animated ? "qq-tonearm--animated" : ""
+            }`}
+            style={{ "--qq-tonearm-lift-from": `${tonearmState.liftFromDeg}deg` } as CSSProperties}
+            aria-hidden="true"
+          >
+            <div className="absolute left-[-11px] top-[-56px] h-[35px] w-[18px] rounded-[4px] bg-gradient-to-b from-[#8f9294] via-[#e9e9e9] to-[#747677] shadow-[0_3px_5px_rgba(0,0,0,0.24)]" />
+            <div className="absolute left-[-2px] top-[-27px] h-[190px] w-[6px] origin-top rotate-[1.5deg] rounded-full bg-gradient-to-b from-[#f8f8f8] via-[#b7bab8] to-[#6f706d] shadow-[5px_3px_8px_rgba(0,0,0,0.20)]" />
+            <div className="absolute left-[-26px] top-[145px] h-[21px] w-[21px] rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.18)]" />
+          </div>
           <div className="absolute left-[224px] top-[25px] flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white/80 shadow-[0_4px_10px_rgba(0,0,0,0.16)]">
             <div className="h-[18px] w-[18px] rounded-full bg-white shadow-inner" />
           </div>
-          <div className="absolute left-[218px] top-[190px] h-[21px] w-[21px] rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.18)]" />
           <div className="absolute right-[12px] bottom-[16px] flex h-[24px] w-[24px] items-center justify-center rounded-full bg-white text-[12px] font-bold" style={{ color: QQ_GREEN }}>
             Q
           </div>
@@ -491,6 +502,59 @@ function useSmoothPlaybackTime(reportedMs: number, isPlaying: boolean, totalMs: 
   }, [isPlaying, reportedMs, totalMs]);
 
   return smoothMs;
+}
+
+function useTonearmPlaybackState(isPlaying: boolean, tonearmRef: RefObject<HTMLDivElement | null>) {
+  const firstRenderRef = useRef(true);
+  const readyForAnimationRef = useRef(false);
+  const [tonearmState, setTonearmState] = useState(() => ({
+    playing: isPlaying,
+    animated: false,
+    liftFromDeg: 13,
+  }));
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      readyForAnimationRef.current = true;
+    }, 320);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      setTonearmState({ playing: isPlaying, animated: false, liftFromDeg: 13 });
+      return;
+    }
+    if (!readyForAnimationRef.current) {
+      setTonearmState({ playing: isPlaying, animated: false, liftFromDeg: 13 });
+      return;
+    }
+    setTonearmState((current) => {
+      if (current.playing === isPlaying) return current;
+      return {
+        playing: isPlaying,
+        animated: true,
+        liftFromDeg: isPlaying ? 13 : readRotationDeg(tonearmRef.current) ?? current.liftFromDeg,
+      };
+    });
+    const timeout = window.setTimeout(() => {
+      setTonearmState((current) =>
+        current.playing === isPlaying ? { ...current, animated: false } : current,
+      );
+    }, 900);
+    return () => window.clearTimeout(timeout);
+  }, [isPlaying, tonearmRef]);
+
+  return tonearmState;
+}
+
+function readRotationDeg(node: HTMLElement | null): number | null {
+  if (!node) return null;
+  const transform = getComputedStyle(node).transform;
+  if (!transform || transform === "none") return null;
+  const matrix = new DOMMatrixReadOnly(transform);
+  return Math.atan2(matrix.b, matrix.a) * (180 / Math.PI);
 }
 
 interface LyricRowProps {

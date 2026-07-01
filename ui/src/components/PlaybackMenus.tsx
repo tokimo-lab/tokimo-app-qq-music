@@ -42,6 +42,7 @@ export interface PlaybackMenusProps {
   onSetQueue: (queue: MediaTrack[], startIndex?: number) => void;
   onClearQueue: () => void;
   onToggleLike: () => void;
+  onToggle: () => void;
   modeButtonClass?: string;
   volumeButtonClass?: string;
   qualityButtonClass?: string;
@@ -285,10 +286,29 @@ export function QueueControl(props: PlaybackMenusProps) {
   const active = props.snapshot?.providerId === "qq-music" ? props.snapshot : null;
   const queue = active?.queue ?? [];
   const currentIndex = active?.currentIndex ?? -1;
+  const isPlaying = active?.isPlaying ?? false;
+  const queueOpen = props.openMenu === "queue";
+  const drawer = useDrawerPresence(queueOpen);
   const full = props.queueVariant === "full";
   const positionClass = props.queuePopoverClass ?? "right-[-12px] bottom-[calc(100%+16px)]";
   const frameClass = props.queuePopoverFrameClass ?? "h-[470px] w-[440px]";
   const bodyClass = props.queuePopoverBodyClass ?? "p-5";
+  const queueViewportRef = useRef<HTMLDivElement | null>(null);
+  const currentRowRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!queueOpen || currentIndex < 0) return;
+    const frame = requestAnimationFrame(() => {
+      const viewport = queueViewportRef.current;
+      const row = currentRowRef.current;
+      if (!viewport || !row) return;
+      const rowHeight = row.getBoundingClientRect().height || (full ? 58 : 64);
+      const rowTopInViewportContent = row.offsetTop - viewport.offsetTop;
+      viewport.scrollTop = Math.max(0, rowTopInViewportContent - rowHeight * 2);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [queueOpen, currentIndex, full]);
+
   function remove(index: number) {
     const next = queue.filter((_, itemIndex) => itemIndex !== index);
     if (next.length === 0) {
@@ -307,14 +327,14 @@ export function QueueControl(props: PlaybackMenusProps) {
         className={props.queueButtonClass}
         onClick={(event) => {
           event.stopPropagation();
-          props.onOpenMenu(props.openMenu === "queue" ? null : "queue");
+          props.onOpenMenu(queueOpen ? null : "queue");
         }}
         aria-label="播放队列"
       >
         <ListMusic className={props.iconClass} />
       </button>
-      {props.openMenu === "queue" && (
-        <Popover className={`${positionClass} ${frameClass} ${bodyClass} flex flex-col bg-[#242426] text-neutral-100`}>
+      {drawer.mounted && (
+        <Popover className={`qq-side-drawer ${drawer.className} ${positionClass} ${frameClass} ${bodyClass} flex flex-col bg-[#242426] text-neutral-100`}>
           <div className="flex items-center justify-between">
             <div>
               <div className="text-[20px] font-semibold">播放队列</div>
@@ -339,12 +359,14 @@ export function QueueControl(props: PlaybackMenusProps) {
               </button>
             </div>
           </div>
-          <div className={`qq-scrollbar min-h-0 flex-1 overflow-y-auto ${full ? "mt-4 pr-0" : "mt-4 pr-2"}`}>
+          <div ref={queueViewportRef} className={`qq-scrollbar min-h-0 flex-1 overflow-y-auto ${full ? "mt-4 pr-0" : "mt-4 pr-2"}`}>
             {queue.map((track, index) => {
               const song = songFromTrack(track);
               const current = index === currentIndex;
+              const OverlayIcon = current && isPlaying ? Pause : Play;
               return (
                 <div
+                  ref={current ? currentRowRef : undefined}
                   key={`${track.id}-${index}`}
                   className={`group flex items-center rounded-[4px] ${full ? "h-[58px] gap-3 px-2" : "h-[64px] gap-3 px-3"} ${
                     current ? (full ? "bg-[#444446]" : "bg-white/12") : full && index % 2 === 0 ? "bg-white/[0.025] hover:bg-white/[0.05]" : "hover:bg-white/6"
@@ -352,11 +374,20 @@ export function QueueControl(props: PlaybackMenusProps) {
                 >
                   <div className={`relative shrink-0 overflow-hidden rounded ${full ? "h-[42px] w-[42px]" : "h-10 w-10"}`}>
                     {track.artworkUrl ? <img src={track.artworkUrl} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full bg-white/10" />}
-                    {current && full && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-white">
-                        <Play className="h-5 w-5 fill-current" />
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      className={`absolute inset-0 flex cursor-pointer items-center justify-center bg-black/45 text-white transition-opacity ${
+                        current ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      }`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (current) props.onToggle();
+                        else props.onSkipToIndex(index);
+                      }}
+                      aria-label={current ? (isPlaying ? "暂停" : "播放") : `播放 ${track.title}`}
+                    >
+                      <OverlayIcon className={`h-5 w-5 ${current && isPlaying ? "" : "translate-x-0.5 fill-current"}`} />
+                    </button>
                   </div>
                   <button
                     type="button"
@@ -421,9 +452,11 @@ function QueueBadges({ current }: { current: boolean }) {
 export function CommentsControl(props: PlaybackMenusProps) {
   const [data, setData] = useState<SongCommentsResp | null>(null);
   const [loading, setLoading] = useState(false);
+  const commentsOpen = props.openMenu === "comments";
+  const drawer = useDrawerPresence(commentsOpen);
 
   useEffect(() => {
-    if (props.openMenu !== "comments" || !props.current?.songId) return;
+    if (!commentsOpen || !props.current?.songId) return;
     let cancelled = false;
     setLoading(true);
     api
@@ -440,7 +473,7 @@ export function CommentsControl(props: PlaybackMenusProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.current?.songId, props.openMenu]);
+  }, [props.current?.songId, commentsOpen]);
 
   const hotComments = data?.hotComments ?? [];
   const recentHotComments = data?.comments ?? [];
@@ -455,15 +488,15 @@ export function CommentsControl(props: PlaybackMenusProps) {
         className={props.commentsButtonClass}
         onClick={(event) => {
           event.stopPropagation();
-          props.onOpenMenu(props.openMenu === "comments" ? null : "comments");
+          props.onOpenMenu(commentsOpen ? null : "comments");
         }}
         aria-label="评论"
       >
         <MessageCircle className={props.iconClass} />
         {data?.total ? <span className="absolute -top-2 left-4 text-[10px] text-[#3d8cff]">{shortCount(data.total)}</span> : null}
       </button>
-      {props.openMenu === "comments" && (
-        <Popover className={`${positionClass} ${frameClass} ${bodyClass} flex flex-col bg-[#242426] text-neutral-100`}>
+      {drawer.mounted && (
+        <Popover className={`qq-side-drawer ${drawer.className} ${positionClass} ${frameClass} ${bodyClass} flex flex-col bg-[#242426] text-neutral-100`}>
           <div className="flex items-center gap-4">
             {props.current?.artworkUrl ? <img src={props.current.artworkUrl} alt="" className="h-12 w-12 rounded object-cover" /> : <div className="h-12 w-12 rounded bg-white/10" />}
             <div className="min-w-0">
@@ -520,6 +553,24 @@ function Popover({ className, children }: { className: string; children: ReactNo
       {children}
     </div>
   );
+}
+
+function useDrawerPresence(open: boolean) {
+  const [mounted, setMounted] = useState(open);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    const timeout = window.setTimeout(() => setMounted(false), 220);
+    return () => window.clearTimeout(timeout);
+  }, [open]);
+
+  return {
+    mounted,
+    className: open ? "qq-side-drawer--open" : "qq-side-drawer--closed",
+  };
 }
 
 function ModeItem({ icon, label, active: _active, onClick }: { icon: ReactNode; label: string; active: boolean; onClick: () => void }) {

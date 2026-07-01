@@ -65,6 +65,7 @@ export function PlayerBar({
     onSetQueue,
     onClearQueue,
     onToggleLike,
+    onToggle,
     iconClass: "h-6 w-6",
   };
 

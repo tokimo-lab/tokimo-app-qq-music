@@ -14,6 +14,7 @@ entry        = "assets/index.js"
 window_type  = "qq-music"
 category     = "app"
 icon         = "Music2"
+image        = "qq-music.svg"
 color        = "#00d47e"
 width        = 1280
 height       = 850
