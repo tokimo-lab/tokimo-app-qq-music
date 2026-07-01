@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::http::StatusCode;
 use reqwest::{Client, RequestBuilder, header};
 use serde_json::{Value, json};
@@ -228,6 +230,128 @@ impl QqClient {
             .unwrap_or_default())
     }
 
+    pub async fn liked_songmids(&self, cookie_header: &str) -> Result<Vec<String>, AppError> {
+        let map = self.liked_song_map(cookie_header).await?;
+        if !map.is_empty() {
+            return Ok(map.into_keys().collect());
+        }
+        let liked_playlist = self
+            .created_playlists(cookie_header)
+            .await?
+            .into_iter()
+            .find(|playlist| playlist.title == "我喜欢");
+        let Some(playlist) = liked_playlist else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .playlist_detail(&playlist.id)
+            .await?
+            .tracks
+            .into_iter()
+            .map(|track| track.songmid)
+            .filter(|songmid| !songmid.is_empty())
+            .collect())
+    }
+
+    pub async fn like_song(&self, cookie_header: &str, songmid: &str) -> Result<(), AppError> {
+        let songmid = songmid.trim();
+        if songmid.is_empty() {
+            return Err(AppError::bad_request("songmid is required"));
+        }
+        let data = [
+            ("midlist", songmid),
+            ("typelist", "13"),
+            ("dirid", "201"),
+            ("addtype", ""),
+            ("formsender", "4"),
+            ("r2", "0"),
+            ("r3", "1"),
+            ("utf8", "1"),
+            ("g_tk", "5381"),
+        ];
+        let value = self
+            .qq(
+                self.client
+                    .get("https://c.y.qq.com/splcloud/fcgi-bin/fcg_music_add2songdir.fcg?g_tk=5381")
+                    .query(&data),
+                Some(cookie_header),
+            )
+            .await?;
+        ensure_qq_ok(&value, "add liked song")
+    }
+
+    pub async fn unlike_song(&self, cookie_header: &str, songmid: &str, song_id: Option<&str>) -> Result<(), AppError> {
+        let songmid = songmid.trim();
+        if songmid.is_empty() {
+            return Err(AppError::bad_request("songmid is required"));
+        }
+        let uin = qq_uin_from_cookie(cookie_header)
+            .ok_or_else(|| AppError::Unauthorized("QQ cookie missing uin or wxuin".into()))?;
+        let song_id = match song_id.filter(|value| !value.trim().is_empty()) {
+            Some(value) => value.to_string(),
+            None => {
+                let map = self.liked_song_map(cookie_header).await?;
+                let Some(value) = map.get(songmid) else {
+                    return Ok(());
+                };
+                value.clone()
+            }
+        };
+        let data = [
+            ("loginUin", uin.as_str()),
+            ("hostUin", "0"),
+            ("format", "json"),
+            ("inCharset", "utf8"),
+            ("outCharset", "utf-8"),
+            ("notice", "0"),
+            ("platform", "yqq.post"),
+            ("needNewCode", "0"),
+            ("uin", uin.as_str()),
+            ("dirid", "201"),
+            ("ids", song_id.as_str()),
+            ("source", "103"),
+            ("types", "3"),
+            ("formsender", "4"),
+            ("flag", "2"),
+            ("utf8", "1"),
+            ("from", "3"),
+        ];
+        let value = self
+            .qq(
+                self.client
+                    .get("https://c.y.qq.com/qzone/fcg-bin/fcg_music_delbatchsong.fcg?g_tk=5381")
+                    .query(&data),
+                Some(cookie_header),
+            )
+            .await?;
+        ensure_qq_ok(&value, "remove liked song")
+    }
+
+    async fn liked_song_map(&self, cookie_header: &str) -> Result<HashMap<String, String>, AppError> {
+        let data = [("dirid", "201"), ("dirinfo", "1"), ("g_tk", "5381"), ("format", "json")];
+        let value = self
+            .qq(
+                self.client
+                    .get("https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg")
+                    .query(&data),
+                Some(cookie_header),
+            )
+            .await?;
+        ensure_qq_ok(&value, "load liked songs")?;
+        let mids = values_to_strings(value.get("mapmid"));
+        let ids = values_to_strings(value.get("map"));
+        let mut result = HashMap::new();
+        for (index, mid) in mids.into_iter().enumerate() {
+            if mid.is_empty() {
+                continue;
+            }
+            if let Some(id) = ids.get(index).filter(|id| !id.is_empty()) {
+                result.insert(mid, id.clone());
+            }
+        }
+        Ok(result)
+    }
+
     pub async fn audio_url(&self, songmid: &str, cookie_header: Option<&str>) -> Result<String, AppError> {
         let uin = cookie_header
             .and_then(qq_uin_from_cookie)
@@ -340,6 +464,10 @@ pub fn cookie_hint(cookie_header: &str) -> Option<String> {
 
 fn convert_song(item: &Value) -> SongDto {
     let songmid = str_at(item, &["mid", "songmid", "song_mid"]).unwrap_or("").to_string();
+    let song_id = number_at(item, &["id", "songid", "song_id"])
+        .map(|value| value.to_string())
+        .or_else(|| str_at(item, &["id", "songid", "song_id"]).map(str::to_string))
+        .unwrap_or_default();
     let title = str_at(item, &["name", "songname", "title"])
         .unwrap_or("Unknown")
         .to_string();
@@ -379,6 +507,7 @@ fn convert_song(item: &Value) -> SongDto {
     };
     SongDto {
         id: format!("qqtrack_{songmid}"),
+        song_id,
         songmid: songmid.clone(),
         title,
         artist,
@@ -495,6 +624,51 @@ fn number_at(value: &Value, keys: &[&str]) -> Option<u64> {
                 .or_else(|| item.as_str().and_then(|raw| raw.parse::<u64>().ok()))
         })
     })
+}
+
+fn values_to_strings(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::Array(items)) => items.iter().filter_map(value_to_string).collect(),
+        Some(Value::Object(items)) => {
+            let mut keyed = items
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.parse::<usize>()
+                        .ok()
+                        .and_then(|index| value_to_string(value).map(|item| (index, item)))
+                })
+                .collect::<Vec<_>>();
+            keyed.sort_by_key(|(index, _)| *index);
+            keyed.into_iter().map(|(_, item)| item).collect()
+        }
+        Some(value) => value_to_string(value).into_iter().collect(),
+        None => Vec::new(),
+    }
+}
+
+fn value_to_string(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .map(str::to_string)
+        .or_else(|| value.as_u64().map(|item| item.to_string()))
+        .or_else(|| value.as_i64().map(|item| item.to_string()))
+}
+
+fn ensure_qq_ok(value: &Value, action: &str) -> Result<(), AppError> {
+    match value.get("code").and_then(Value::as_i64).unwrap_or(0) {
+        0 => Ok(()),
+        1000 => Err(AppError::Unauthorized("QQ Music is not logged in".into())),
+        _ => Err(AppError::Upstream {
+            status: StatusCode::BAD_GATEWAY,
+            body: format!(
+                "{action} failed: {}",
+                value
+                    .get("msg")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown QQ Music error")
+            ),
+        }),
+    }
 }
 
 fn percent_encode(input: &str) -> String {

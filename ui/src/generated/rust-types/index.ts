@@ -1,4 +1,6 @@
 export type { AuthStatusResp } from "./AuthStatusResp";
+export type { LikedSongsResp } from "./LikedSongsResp";
+export type { LikeSongResp } from "./LikeSongResp";
 export type { LyricsResp } from "./LyricsResp";
 export type { MyPlaylistsResp } from "./MyPlaylistsResp";
 export type { PlaylistDetailResp } from "./PlaylistDetailResp";

@@ -1,5 +1,7 @@
 export type {
   AuthStatusResp,
+  LikeSongResp,
+  LikedSongsResp,
   LyricsResp,
   MyPlaylistsResp,
   PlaylistDetailResp,

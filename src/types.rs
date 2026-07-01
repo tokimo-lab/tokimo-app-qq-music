@@ -5,6 +5,7 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 pub struct SongDto {
     pub id: String,
+    pub song_id: String,
     pub songmid: String,
     pub title: String,
     pub artist: String,
@@ -75,6 +76,19 @@ pub struct MyPlaylistsResp {
     pub user: UserDto,
     pub created: Vec<PlaylistDto>,
     pub favorite: Vec<PlaylistDto>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LikedSongsResp {
+    pub songmids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LikeSongResp {
+    pub songmid: String,
+    pub liked: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

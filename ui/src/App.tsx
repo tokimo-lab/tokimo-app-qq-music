@@ -38,6 +38,7 @@ export default function App() {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [lastSong, setLastSong] = useState<SongDto | null>(null);
   const [lyric, setLyric] = useState("");
+  const [likedSongmids, setLikedSongmids] = useState<Set<string>>(() => new Set());
 
   const activeSnapshot = snapshot?.providerId === PROVIDER_ID ? snapshot : null;
   const currentSong = useMemo(() => currentSongFromSnapshot(activeSnapshot) ?? lastSong, [activeSnapshot, lastSong]);
@@ -82,8 +83,9 @@ export default function App() {
     setAuth(authValue);
     setRecommended(recommendValue);
     if (authValue?.isLogin) {
-      await refreshAccountPlaylists();
+      await Promise.all([refreshAccountPlaylists(), refreshLikedSongs()]);
     } else {
+      setLikedSongmids(new Set());
       setView("home");
     }
   }
@@ -100,6 +102,15 @@ export default function App() {
       }
     } catch {
       setAccountPlaylists([]);
+    }
+  }
+
+  async function refreshLikedSongs(): Promise<void> {
+    try {
+      const data = await api.likedSongs();
+      setLikedSongmids(new Set(data.songmids));
+    } catch {
+      setLikedSongmids(new Set());
     }
   }
 
@@ -144,7 +155,7 @@ export default function App() {
       const next = await api.saveCookie(cookie);
       setAuth(next);
       setLoginOpen(false);
-      await refreshAccountPlaylists();
+      await Promise.all([refreshAccountPlaylists(), refreshLikedSongs()]);
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "登录失败");
     } finally {
@@ -155,6 +166,7 @@ export default function App() {
   async function logout(): Promise<void> {
     setAuth(await api.logout());
     setAccountPlaylists([]);
+    setLikedSongmids(new Set());
     setSelectedPlaylistId(undefined);
     setPlaylist(null);
     setView("home");
@@ -177,6 +189,32 @@ export default function App() {
     if (activeSnapshot?.isPlaying) mediaApi.pause();
     else mediaApi.resume();
   }, [activeSnapshot?.isPlaying, mediaApi]);
+
+  async function toggleLike(song: SongDto): Promise<void> {
+    if (!auth?.isLogin) {
+      setLoginOpen(true);
+      return;
+    }
+    const wasLiked = likedSongmids.has(song.songmid);
+    setLikedSongmids((current) => {
+      const next = new Set(current);
+      if (wasLiked) next.delete(song.songmid);
+      else next.add(song.songmid);
+      return next;
+    });
+    try {
+      if (wasLiked) await api.unlikeSong(song.songmid, song.songId);
+      else await api.likeSong(song.songmid);
+    } catch (error) {
+      setLikedSongmids((current) => {
+        const next = new Set(current);
+        if (wasLiked) next.add(song.songmid);
+        else next.delete(song.songmid);
+        return next;
+      });
+      console.error("qq-music like toggle failed", error);
+    }
+  }
 
   return (
     <div className="relative flex h-full overflow-hidden bg-[#171717] text-neutral-100">
@@ -223,6 +261,8 @@ export default function App() {
                 onPlayAll={() => void playSongs(playlist?.tracks ?? [], 0)}
                 onPlayTrack={(index) => void playSongs(playlist?.tracks ?? [], index)}
                 onPause={() => mediaApi?.pause()}
+                likedSongmids={likedSongmids}
+                onToggleLike={(song) => void toggleLike(song)}
               />
             ) : (
               <SearchView
@@ -235,6 +275,8 @@ export default function App() {
                 onPlaySong={(index) => void playSongs(searchResults?.songs ?? [], index)}
                 onPause={() => mediaApi?.pause()}
                 onOpenPlaylist={(id) => void openPlaylist(id)}
+                likedSongmids={likedSongmids}
+                onToggleLike={(song) => void toggleLike(song)}
               />
             )}
           </div>
@@ -243,11 +285,13 @@ export default function App() {
         <PlayerBar
           snapshot={snapshot}
           current={currentSong}
+          liked={currentSong ? likedSongmids.has(currentSong.songmid) : false}
           onToggle={togglePlay}
           onPrev={() => mediaApi?.previous()}
           onNext={() => mediaApi?.next()}
           onSeek={(ms) => mediaApi?.seek(ms)}
           onNowPlaying={() => setNowPlayingOpen(true)}
+          onToggleLike={() => currentSong && void toggleLike(currentSong)}
         />
       </main>
 
@@ -257,11 +301,13 @@ export default function App() {
           snapshot={snapshot}
           current={currentSong}
           lyric={lyric}
+          liked={currentSong ? likedSongmids.has(currentSong.songmid) : false}
           onClose={() => setNowPlayingOpen(false)}
           onToggle={togglePlay}
           onPrev={() => mediaApi?.previous()}
           onNext={() => mediaApi?.next()}
           onSeek={(ms) => mediaApi?.seek(ms)}
+          onToggleLike={() => currentSong && void toggleLike(currentSong)}
         />
       )}
     </div>

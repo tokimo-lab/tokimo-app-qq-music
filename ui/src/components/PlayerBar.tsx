@@ -6,14 +6,16 @@ import { duration } from "./format";
 interface PlayerBarProps {
   snapshot: MediaCenterSnapshot | null;
   current: SongDto | null;
+  liked: boolean;
   onToggle: () => void;
   onPrev: () => void;
   onNext: () => void;
   onSeek: (ms: number) => void;
   onNowPlaying: () => void;
+  onToggleLike: () => void;
 }
 
-export function PlayerBar({ snapshot, current, onToggle, onPrev, onNext, onSeek, onNowPlaying }: PlayerBarProps) {
+export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, onSeek, onNowPlaying, onToggleLike }: PlayerBarProps) {
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
   const currentMs = active?.currentTimeMs ?? 0;
@@ -39,7 +41,16 @@ export function PlayerBar({ snapshot, current, onToggle, onPrev, onNext, onSeek,
           <div className="truncate text-sm text-white">{current?.title ?? "未播放"}</div>
           <div className="truncate text-xs text-neutral-400">{current?.artist ?? "QQ音乐"}</div>
           <div className="mt-2 flex items-center gap-4 text-neutral-400">
-            <Heart className="h-4 w-4 text-red-400" />
+            <button
+              type="button"
+              className={`cursor-pointer ${liked ? "text-red-400" : "text-neutral-400 hover:text-red-300"}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleLike();
+              }}
+            >
+              <Heart className={`h-4 w-4 ${liked ? "fill-current" : ""}`} />
+            </button>
             <MessageCircle className="h-4 w-4" />
             <MoreHorizontal className="h-4 w-4" />
           </div>

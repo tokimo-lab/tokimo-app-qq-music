@@ -1,5 +1,7 @@
 import type {
   AuthStatusResp,
+  LikeSongResp,
+  LikedSongsResp,
   LyricsResp,
   MyPlaylistsResp,
   PlaylistDetailResp,
@@ -53,6 +55,11 @@ export const api = {
     }),
   logout: () => request<AuthStatusResp>("/auth/cookie", { method: "DELETE" }),
   myPlaylists: () => request<MyPlaylistsResp>("/me/playlists"),
+  likedSongs: () => request<LikedSongsResp>("/me/liked-songs"),
+  likeSong: (songmid: string) =>
+    request<LikeSongResp>(`/me/liked-songs/${encodeURIComponent(songmid)}`, { method: "PUT" }),
+  unlikeSong: (songmid: string, songId?: string) =>
+    request<LikeSongResp>(`/me/liked-songs/${encodeURIComponent(songmid)}${params({ songId })}`, { method: "DELETE" }),
   recommendPlaylists: (limit = 18) =>
     request<RecommendPlaylistsResp>(`/recommend/playlists${params({ limit })}`),
   playlist: (id: string) => request<PlaylistDetailResp>(`/playlists/${encodeURIComponent(id)}`),
@@ -64,4 +71,3 @@ export const api = {
 export function audioUrl(songmid: string): string {
   return `${BASE}/audio/${encodeURIComponent(songmid)}`;
 }
-

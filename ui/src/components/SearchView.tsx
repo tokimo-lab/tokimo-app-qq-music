@@ -1,5 +1,5 @@
 import { ListMusic, Play } from "lucide-react";
-import type { PlaylistDto, SearchResp } from "../types/domain";
+import type { PlaylistDto, SearchResp, SongDto } from "../types/domain";
 import { TrackTable } from "./TrackTable";
 
 interface SearchViewProps {
@@ -9,9 +9,11 @@ interface SearchViewProps {
   error: string | null;
   currentSongmid?: string;
   isPlaying: boolean;
+  likedSongmids: ReadonlySet<string>;
   onPlaySong: (index: number) => void;
   onPause: () => void;
   onOpenPlaylist: (id: string) => void;
+  onToggleLike: (track: SongDto) => void;
 }
 
 export function SearchView({
@@ -21,9 +23,11 @@ export function SearchView({
   error,
   currentSongmid,
   isPlaying,
+  likedSongmids,
   onPlaySong,
   onPause,
   onOpenPlaylist,
+  onToggleLike,
 }: SearchViewProps) {
   return (
     <div className="qq-scrollbar h-full overflow-y-auto px-10 pt-8 pb-10">
@@ -42,8 +46,10 @@ export function SearchView({
               tracks={results.songs}
               currentSongmid={currentSongmid}
               isPlaying={isPlaying}
+              likedSongmids={likedSongmids}
               onPlay={onPlaySong}
               onPause={onPause}
+              onToggleLike={onToggleLike}
               dense
             />
           </section>

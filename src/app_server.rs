@@ -34,6 +34,11 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
             put(handlers::save_cookie).delete(handlers::delete_cookie),
         )
         .route("/me/playlists", get(handlers::my_playlists))
+        .route("/me/liked-songs", get(handlers::liked_songs))
+        .route(
+            "/me/liked-songs/{songmid}",
+            put(handlers::like_song).delete(handlers::unlike_song),
+        )
         .route("/search", get(handlers::search))
         .route("/recommend/playlists", get(handlers::recommend_playlists))
         .route("/playlists/{id}", get(handlers::playlist_detail))

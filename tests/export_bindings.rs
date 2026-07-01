@@ -6,8 +6,8 @@ use std::{
 };
 
 use tokimo_app_qq_music::types::{
-    AuthStatusResp, LyricsResp, MyPlaylistsResp, PlaylistDetailResp, PlaylistDto, RecommendPlaylistsResp,
-    SaveCookieReq, SearchResp, SongDto, UserDto,
+    AuthStatusResp, LikeSongResp, LikedSongsResp, LyricsResp, MyPlaylistsResp, PlaylistDetailResp, PlaylistDto,
+    RecommendPlaylistsResp, SaveCookieReq, SearchResp, SongDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
@@ -25,6 +25,8 @@ fn export_bindings() {
     write_binding::<SearchResp>(&cfg, &dir, "SearchResp.ts");
     write_binding::<PlaylistDetailResp>(&cfg, &dir, "PlaylistDetailResp.ts");
     write_binding::<MyPlaylistsResp>(&cfg, &dir, "MyPlaylistsResp.ts");
+    write_binding::<LikedSongsResp>(&cfg, &dir, "LikedSongsResp.ts");
+    write_binding::<LikeSongResp>(&cfg, &dir, "LikeSongResp.ts");
     write_binding::<RecommendPlaylistsResp>(&cfg, &dir, "RecommendPlaylistsResp.ts");
     write_binding::<LyricsResp>(&cfg, &dir, "LyricsResp.ts");
 
@@ -32,6 +34,8 @@ fn export_bindings() {
         dir.join("index.ts"),
         [
             "export type { AuthStatusResp } from \"./AuthStatusResp\";",
+            "export type { LikedSongsResp } from \"./LikedSongsResp\";",
+            "export type { LikeSongResp } from \"./LikeSongResp\";",
             "export type { LyricsResp } from \"./LyricsResp\";",
             "export type { MyPlaylistsResp } from \"./MyPlaylistsResp\";",
             "export type { PlaylistDetailResp } from \"./PlaylistDetailResp\";",

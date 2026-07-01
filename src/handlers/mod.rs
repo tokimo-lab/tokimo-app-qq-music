@@ -15,7 +15,10 @@ use crate::{
     error::{ApiResponse, AppError, ok},
     openapi_client::OpenApiClient,
     qq::{QqClient, cookie_hint},
-    types::{AuthStatusResp, LyricsResp, MyPlaylistsResp, RecommendPlaylistsResp, SaveCookieReq, SearchResp},
+    types::{
+        AuthStatusResp, LikeSongResp, LikedSongsResp, LyricsResp, MyPlaylistsResp, RecommendPlaylistsResp,
+        SaveCookieReq, SearchResp,
+    },
 };
 
 const PREF_SCOPE: &str = "component";
@@ -110,6 +113,12 @@ pub struct LimitParams {
     pub limit: u32,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnlikeSongParams {
+    pub song_id: Option<String>,
+}
+
 fn default_recommend_limit() -> u32 {
     18
 }
@@ -186,6 +195,43 @@ pub async fn my_playlists(
         created,
         favorite,
     }))
+}
+
+pub async fn liked_songs(
+    State(ctx): State<Arc<AppCtx>>,
+    caller: AppCaller,
+) -> Result<RespJson<ApiResponse<LikedSongsResp>>, AppError> {
+    let cookie = read_qq_cookie(&ctx, &caller)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("QQ Music is not logged in".into()))?;
+    Ok(ok(LikedSongsResp {
+        songmids: ctx.qq.liked_songmids(&cookie).await?,
+    }))
+}
+
+pub async fn like_song(
+    State(ctx): State<Arc<AppCtx>>,
+    caller: AppCaller,
+    Path(songmid): Path<String>,
+) -> Result<RespJson<ApiResponse<LikeSongResp>>, AppError> {
+    let cookie = read_qq_cookie(&ctx, &caller)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("QQ Music is not logged in".into()))?;
+    ctx.qq.like_song(&cookie, &songmid).await?;
+    Ok(ok(LikeSongResp { songmid, liked: true }))
+}
+
+pub async fn unlike_song(
+    State(ctx): State<Arc<AppCtx>>,
+    caller: AppCaller,
+    Path(songmid): Path<String>,
+    Query(params): Query<UnlikeSongParams>,
+) -> Result<RespJson<ApiResponse<LikeSongResp>>, AppError> {
+    let cookie = read_qq_cookie(&ctx, &caller)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("QQ Music is not logged in".into()))?;
+    ctx.qq.unlike_song(&cookie, &songmid, params.song_id.as_deref()).await?;
+    Ok(ok(LikeSongResp { songmid, liked: false }))
 }
 
 pub async fn search(

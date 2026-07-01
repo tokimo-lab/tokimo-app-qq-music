@@ -8,14 +8,16 @@ interface NowPlayingViewProps {
   snapshot: MediaCenterSnapshot | null;
   current: SongDto | null;
   lyric: string;
+  liked: boolean;
   onClose: () => void;
   onToggle: () => void;
   onPrev: () => void;
   onNext: () => void;
   onSeek: (ms: number) => void;
+  onToggleLike: () => void;
 }
 
-export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, onPrev, onNext, onSeek }: NowPlayingViewProps) {
+export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onToggle, onPrev, onNext, onSeek, onToggleLike }: NowPlayingViewProps) {
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
   const currentMs = active?.currentTimeMs ?? 0;
@@ -116,7 +118,9 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
             <div className="truncate text-[15px] leading-5 font-medium">{current?.title ?? "未播放"}</div>
             <div className="truncate text-[13px] leading-5 text-slate-500">{current?.artist ?? "QQ音乐"}</div>
           </div>
-          <Heart className="h-5 w-5 fill-red-400 text-red-400" />
+          <button type="button" className={`cursor-pointer ${liked ? "text-red-400" : "text-slate-500 hover:text-red-400"}`} onClick={onToggleLike}>
+            <Heart className={`h-5 w-5 ${liked ? "fill-current" : ""}`} />
+          </button>
           <MessageCircle className="h-5 w-5 text-slate-500" />
           <MoreHorizontal className="h-5 w-5 text-slate-500" />
         </div>

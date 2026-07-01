@@ -10,9 +10,11 @@ interface PlaylistViewProps {
   error: string | null;
   currentSongmid?: string;
   isPlaying: boolean;
+  likedSongmids: ReadonlySet<string>;
   onPlayAll: () => void;
   onPlayTrack: (index: number) => void;
   onPause: () => void;
+  onToggleLike: (track: SongDto) => void;
 }
 
 export function PlaylistView({
@@ -21,9 +23,11 @@ export function PlaylistView({
   error,
   currentSongmid,
   isPlaying,
+  likedSongmids,
   onPlayAll,
   onPlayTrack,
   onPause,
+  onToggleLike,
 }: PlaylistViewProps) {
   const [compact, setCompact] = useState(false);
   const collapseAt = 148;
@@ -103,8 +107,10 @@ export function PlaylistView({
         tracks={detail.tracks}
         currentSongmid={currentSongmid}
         isPlaying={isPlaying}
+        likedSongmids={likedSongmids}
         onPlay={onPlayTrack}
         onPause={onPause}
+        onToggleLike={onToggleLike}
         showHeader={false}
       />
     </div>

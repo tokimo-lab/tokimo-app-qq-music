@@ -1,4 +1,4 @@
-import { Heart, Pause, Play } from "lucide-react";
+import { Heart, Play } from "lucide-react";
 import type { SongDto } from "../types/domain";
 import { duration } from "./format";
 
@@ -6,19 +6,32 @@ interface TrackTableProps {
   tracks: SongDto[];
   currentSongmid?: string;
   isPlaying: boolean;
+  likedSongmids: ReadonlySet<string>;
   onPlay: (index: number) => void;
   onPause: () => void;
+  onToggleLike: (track: SongDto) => void;
   dense?: boolean;
   showHeader?: boolean;
 }
 
-export function TrackTable({ tracks, currentSongmid, isPlaying, onPlay, onPause, dense = false, showHeader = true }: TrackTableProps) {
+export function TrackTable({
+  tracks,
+  currentSongmid,
+  isPlaying,
+  likedSongmids,
+  onPlay,
+  onPause,
+  onToggleLike,
+  dense = false,
+  showHeader = true,
+}: TrackTableProps) {
   return (
     <div className="w-full">
       {showHeader && <TrackTableHeader />}
       <div className="space-y-1">
         {tracks.map((track, index) => {
           const current = track.songmid === currentSongmid;
+          const liked = likedSongmids.has(track.songmid);
           const disabled = !track.playable;
           return (
             <div
@@ -50,11 +63,10 @@ export function TrackTable({ tracks, currentSongmid, isPlaying, onPlay, onPause,
               </div>
               <button
                 type="button"
-                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full ${
-                  current ? "text-red-400" : "text-neutral-500 hover:text-red-300"
-                }`}
+                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full ${liked ? "text-red-400" : "text-neutral-500 hover:text-red-300"}`}
+                onClick={() => onToggleLike(track)}
               >
-                {current && isPlaying ? <Pause className="h-4 w-4" /> : <Heart className="h-4 w-4" />}
+                <Heart className={`h-4 w-4 ${liked ? "fill-current" : ""}`} />
               </button>
               <div className="truncate text-sm text-neutral-400">{track.album || "--"}</div>
               <div className="text-sm tabular-nums text-neutral-400">{duration(track.durationMs)}</div>
