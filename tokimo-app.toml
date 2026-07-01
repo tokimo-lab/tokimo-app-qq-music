@@ -1,0 +1,28 @@
+[app]
+id          = "qq-music"
+display     = "QQ音乐"
+version     = "0.1.0"
+description = "QQ 音乐搜索、歌单与播放"
+
+[runtime]
+lifecycle    = "resident"
+binary       = "tokimo-app-qq-music"
+ui_dist      = "ui/dist"
+
+[ui]
+entry        = "assets/index.js"
+window_type  = "qq-music"
+category     = "app"
+icon         = "Music2"
+color        = "#00d47e"
+width        = 1280
+height       = 850
+title_bar_style = "overlay"
+full_bleed   = true
+
+[cli]
+name = "tokimo-app-qq-music"
+description = "QQ Music app sidecar"
+
+[dev]
+backend = ["cargo", "watch", "-w", "src", "-x", "build --target-dir ../../target"]

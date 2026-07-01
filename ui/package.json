@@ -1,0 +1,26 @@
+{
+  "name": "@tokimo-app/qq-music-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@tokimo/sdk": "github:tokimo-lab/tokimo-package-sdk#84fc98c8c0af8688d12568e3ec8d14e5b3e5c865",
+    "@tokimo/ui": "github:tokimo-lab/tokimo-ui#0d09afd6d88365fa40dfe729fedf9fb30331eb5e",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tokimo/app-builder": "github:tokimo-lab/tokimo-app-builder#9c6343752b68d63a129f134495468d80b8a62141",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}
+

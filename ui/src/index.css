@@ -1,0 +1,18 @@
+@import "@tokimo/ui/bundle.css";
+
+@source "./**/*.{ts,tsx}";
+
+.qq-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(82 82 82 / 0.75) transparent;
+}
+
+.qq-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.qq-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(82 82 82 / 0.75);
+  border-radius: 999px;
+}
+
