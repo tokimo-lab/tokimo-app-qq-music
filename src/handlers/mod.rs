@@ -16,8 +16,8 @@ use crate::{
     openapi_client::OpenApiClient,
     qq::{LyricLookup, QqClient, cookie_hint},
     types::{
-        AuthStatusResp, LikeSongResp, LikedSongsResp, LyricsResp, MyPlaylistsResp, RecommendPlaylistsResp,
-        SaveCookieReq, SearchResp,
+        AudioQualitiesResp, AudioQualityId, AuthStatusResp, LikeSongResp, LikedSongsResp, LyricsResp, MyPlaylistsResp,
+        RecommendPlaylistsResp, SaveCookieReq, SearchResp, SongCommentsResp,
     },
 };
 
@@ -127,6 +127,29 @@ pub struct LyricsParams {
     pub artist: Option<String>,
     pub album: Option<String>,
     pub duration_ms: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioParams {
+    pub quality: Option<AudioQualityId>,
+    pub song_id: Option<String>,
+    pub media_mid: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QualitiesParams {
+    pub selected: Option<AudioQualityId>,
+    pub song_id: Option<String>,
+    pub media_mid: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentsParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -301,10 +324,24 @@ pub async fn audio(
     caller: AppCaller,
     headers: HeaderMap,
     Path(songmid): Path<String>,
+    Query(params): Query<AudioParams>,
 ) -> Result<Response, AppError> {
     let cookie = read_qq_cookie(&ctx, &caller).await?;
-    let audio_url = ctx.qq.audio_url(&songmid, cookie.as_deref()).await?;
-    let mut req = ctx.qq.audio_request(&audio_url);
+    let audio = ctx
+        .qq
+        .audio_url(
+            &songmid,
+            params.quality.unwrap_or(AudioQualityId::Standard),
+            params.song_id.as_deref(),
+            params.media_mid.as_deref(),
+            cookie.as_deref(),
+        )
+        .await?;
+    let content_type = match audio.quality {
+        AudioQualityId::Sq | AudioQualityId::Master => "audio/flac",
+        AudioQualityId::Standard | AudioQualityId::Hq => "audio/mpeg",
+    };
+    let mut req = ctx.qq.audio_request(&audio.url);
     if let Some(range) = headers.get(header::RANGE) {
         req = req.header(header::RANGE, range.clone());
     }
@@ -321,7 +358,7 @@ pub async fn audio(
 
     let mut builder = Response::builder()
         .status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK))
-        .header(header::CONTENT_TYPE, "audio/mpeg")
+        .header(header::CONTENT_TYPE, content_type)
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CACHE_CONTROL, "private, max-age=300");
 
@@ -333,6 +370,43 @@ pub async fn audio(
 
     let stream = resp.bytes_stream().map_err(std::io::Error::other);
     Ok(builder.body(Body::from_stream(stream)).unwrap().into_response())
+}
+
+pub async fn audio_qualities(
+    State(ctx): State<Arc<AppCtx>>,
+    caller: AppCaller,
+    Path(songmid): Path<String>,
+    Query(params): Query<QualitiesParams>,
+) -> Result<RespJson<ApiResponse<AudioQualitiesResp>>, AppError> {
+    let cookie = read_qq_cookie(&ctx, &caller).await?;
+    Ok(ok(ctx
+        .qq
+        .audio_qualities(
+            &songmid,
+            params.selected.unwrap_or(AudioQualityId::Standard),
+            params.song_id.as_deref(),
+            params.media_mid.as_deref(),
+            cookie.as_deref(),
+        )
+        .await?))
+}
+
+pub async fn song_comments(
+    State(ctx): State<Arc<AppCtx>>,
+    caller: AppCaller,
+    Path(song_id): Path<String>,
+    Query(params): Query<CommentsParams>,
+) -> Result<RespJson<ApiResponse<SongCommentsResp>>, AppError> {
+    let cookie = read_qq_cookie(&ctx, &caller).await?;
+    Ok(ok(ctx
+        .qq
+        .song_comments(
+            &song_id,
+            params.page.unwrap_or(0),
+            params.limit.unwrap_or(20),
+            cookie.as_deref(),
+        )
+        .await?))
 }
 
 pub async fn image_proxy(

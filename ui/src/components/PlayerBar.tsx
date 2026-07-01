@@ -1,7 +1,9 @@
-import type { MediaCenterSnapshot } from "@tokimo/sdk";
-import { Heart, ListMusic, MessageCircle, MoreHorizontal, Pause, Play, Shuffle, SkipBack, SkipForward, Volume2 } from "lucide-react";
-import type { SongDto } from "../types/domain";
+import type { MediaCenterSnapshot, MediaTrack, RepeatMode } from "@tokimo/sdk";
+import { Heart, MoreHorizontal, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { useState } from "react";
+import type { AudioQualityId, SongDto } from "../types/domain";
 import { duration } from "./format";
+import { CommentsControl, PlaybackModeControl, QualityControl, QueueControl, VolumeControl } from "./PlaybackMenus";
 
 interface PlayerBarProps {
   snapshot: MediaCenterSnapshot | null;
@@ -13,14 +15,58 @@ interface PlayerBarProps {
   onSeek: (ms: number) => void;
   onNowPlaying: () => void;
   onToggleLike: () => void;
+  quality: AudioQualityId;
+  onSetShuffle: (on: boolean) => void;
+  onSetRepeat: (mode: RepeatMode) => void;
+  onSetVolume: (volume: number) => void;
+  onSetQuality: (quality: AudioQualityId) => void;
+  onSkipToIndex: (index: number) => void;
+  onSetQueue: (queue: MediaTrack[], startIndex?: number) => void;
+  onClearQueue: () => void;
 }
 
-export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, onSeek, onNowPlaying, onToggleLike }: PlayerBarProps) {
+export function PlayerBar({
+  snapshot,
+  current,
+  liked,
+  onToggle,
+  onPrev,
+  onNext,
+  onSeek,
+  onNowPlaying,
+  onToggleLike,
+  quality,
+  onSetShuffle,
+  onSetRepeat,
+  onSetVolume,
+  onSetQuality,
+  onSkipToIndex,
+  onSetQueue,
+  onClearQueue,
+}: PlayerBarProps) {
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
   const currentMs = active?.currentTimeMs ?? 0;
   const totalMs = active?.durationMs || current?.durationMs || 0;
   const progress = totalMs > 0 ? Math.min(100, (currentMs / totalMs) * 100) : 0;
+  const [openMenu, setOpenMenu] = useState<"mode" | "volume" | "quality" | "queue" | "comments" | null>(null);
+  const menuProps = {
+    snapshot,
+    current,
+    liked,
+    quality,
+    openMenu,
+    onOpenMenu: setOpenMenu,
+    onSetShuffle,
+    onSetRepeat,
+    onSetVolume,
+    onSetQuality,
+    onSkipToIndex,
+    onSetQueue,
+    onClearQueue,
+    onToggleLike,
+    iconClass: "h-6 w-6",
+  };
 
   function seekFromClientX(target: HTMLDivElement, clientX: number) {
     if (totalMs <= 0) return;
@@ -69,7 +115,7 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
             >
               <Heart className={`h-4 w-4 ${liked ? "fill-current" : ""}`} />
             </button>
-            <MessageCircle className="h-4 w-4" />
+            <CommentsControl {...menuProps} commentsButtonClass="relative cursor-pointer text-neutral-400 hover:text-white" iconClass="h-4 w-4" />
             <MoreHorizontal className="h-4 w-4" />
           </div>
         </div>
@@ -77,9 +123,7 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
 
       <div className="flex min-w-[260px] flex-1 flex-col items-center justify-center px-5">
         <div className="flex items-center gap-7">
-          <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
-            <Shuffle className="h-5 w-5" />
-          </button>
+          <PlaybackModeControl {...menuProps} modeButtonClass="cursor-pointer text-neutral-400 hover:text-white" iconClass="h-5 w-5" />
           <button type="button" className="cursor-pointer hover:text-white" onClick={onPrev}>
             <SkipBack className="h-6 w-6 fill-current" />
           </button>
@@ -93,9 +137,7 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
           <button type="button" className="cursor-pointer hover:text-white" onClick={onNext}>
             <SkipForward className="h-6 w-6 fill-current" />
           </button>
-          <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
-            <Volume2 className="h-6 w-6" />
-          </button>
+          <VolumeControl {...menuProps} volumeButtonClass="cursor-pointer text-neutral-400 hover:text-white" />
         </div>
         <div className="mt-3 flex w-full max-w-[520px] items-center gap-3">
           <span className="w-10 text-right text-xs tabular-nums text-neutral-500">{duration(currentMs)}</span>
@@ -109,9 +151,13 @@ export function PlayerBar({ snapshot, current, liked, onToggle, onPrev, onNext, 
       </div>
 
       <div className="flex w-[220px] shrink-0 justify-end gap-5 text-neutral-400">
-        <span className="rounded border border-emerald-400 px-2 py-0.5 text-xs text-emerald-400">HQ</span>
+        <QualityControl
+          {...menuProps}
+          qualityButtonClass="cursor-pointer rounded border border-emerald-400 px-2 py-0.5 text-xs text-emerald-400"
+          qualityLabelClass=""
+        />
         <span className="text-xs">词</span>
-        <ListMusic className="h-6 w-6" />
+        <QueueControl {...menuProps} queueButtonClass="cursor-pointer text-neutral-400 hover:text-white" />
       </div>
     </footer>
   );

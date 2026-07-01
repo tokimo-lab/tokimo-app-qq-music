@@ -55,7 +55,7 @@ export function TrackTable({
                   <div className="flex min-w-0 items-center gap-2">
                     <span className={`truncate text-sm ${current ? "text-emerald-300" : "text-neutral-100"}`}>{track.title}</span>
                     {track.vip && <Badge label="VIP" tone="green" />}
-                    {track.vip && <Badge label="臻品母带" tone="gold" />}
+                    {track.sizeMaster > 0 && <Badge label="臻品母带" tone="gold" />}
                     {disabled && <Badge label="不可播" tone="gray" />}
                   </div>
                   <div className="truncate text-sm text-neutral-400">{track.artist || "未知歌手"}</div>

@@ -1,5 +1,8 @@
 export type {
   AuthStatusResp,
+  AudioQualitiesResp,
+  AudioQualityDto,
+  AudioQualityId,
   LikeSongResp,
   LikedSongsResp,
   LyricLineDto,
@@ -12,6 +15,9 @@ export type {
   RecommendPlaylistsResp,
   SaveCookieReq,
   SearchResp,
+  SongCommentDto,
+  SongCommentReplyDto,
+  SongCommentsResp,
   SongDto,
   UserDto,
 } from "../generated/rust-types";

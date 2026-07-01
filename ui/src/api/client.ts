@@ -1,5 +1,7 @@
 import type {
   AuthStatusResp,
+  AudioQualitiesResp,
+  AudioQualityId,
   LikeSongResp,
   LikedSongsResp,
   LyricsResp,
@@ -7,6 +9,7 @@ import type {
   PlaylistDetailResp,
   RecommendPlaylistsResp,
   SearchResp,
+  SongCommentsResp,
   SongDto,
 } from "../types/domain";
 
@@ -76,10 +79,29 @@ export const api = {
         durationMs: song.durationMs,
       })}`,
     ),
+  qualities: (song: SongDto, selected: AudioQualityId) =>
+    request<AudioQualitiesResp>(
+      `/tracks/${encodeURIComponent(song.songmid)}/qualities${params({
+        selected,
+        songId: song.songId,
+        mediaMid: song.mediaMid,
+      })}`,
+    ),
+  comments: (song: SongDto, page = 0, limit = 20) =>
+    request<SongCommentsResp>(
+      `/comments/songs/${encodeURIComponent(song.songId)}${params({
+        page,
+        limit,
+      })}`,
+    ),
 };
 
-export function audioUrl(songmid: string): string {
-  return `${BASE}/audio/${encodeURIComponent(songmid)}`;
+export function audioUrl(song: SongDto, quality: AudioQualityId): string {
+  return `${BASE}/audio/${encodeURIComponent(song.songmid)}${params({
+    quality,
+    songId: song.songId,
+    mediaMid: song.mediaMid,
+  })}`;
 }
 
 export function imageProxyUrl(url: string): string {

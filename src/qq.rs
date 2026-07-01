@@ -11,7 +11,8 @@ use crate::{
     error::AppError,
     qrc,
     types::{
-        LyricSource, LyricsResp, PlaylistDetailResp, PlaylistDto, RecommendPlaylistsResp, SearchResp, SongDto, UserDto,
+        AudioQualitiesResp, AudioQualityDto, AudioQualityId, LyricSource, LyricsResp, PlaylistDetailResp, PlaylistDto,
+        RecommendPlaylistsResp, SearchResp, SongCommentDto, SongCommentReplyDto, SongCommentsResp, SongDto, UserDto,
     },
 };
 
@@ -41,6 +42,46 @@ struct LyricSession {
     sid: String,
     userip: String,
 }
+
+pub struct ResolvedAudioUrl {
+    pub url: String,
+    pub quality: AudioQualityId,
+}
+
+#[derive(Clone, Copy)]
+struct QualitySpec {
+    id: AudioQualityId,
+    label: &'static str,
+    detail: &'static str,
+    requires_login: bool,
+}
+
+const QUALITY_SPECS: [QualitySpec; 4] = [
+    QualitySpec {
+        id: AudioQualityId::Standard,
+        label: "标准品质",
+        detail: "128K MP3",
+        requires_login: false,
+    },
+    QualitySpec {
+        id: AudioQualityId::Hq,
+        label: "HQ高品质",
+        detail: "320K MP3",
+        requires_login: true,
+    },
+    QualitySpec {
+        id: AudioQualityId::Sq,
+        label: "SQ无损品质",
+        detail: "FLAC",
+        requires_login: true,
+    },
+    QualitySpec {
+        id: AudioQualityId::Master,
+        label: "臻品母带",
+        detail: "Hi-Res / 臻品资源",
+        requires_login: true,
+    },
+];
 
 impl QqClient {
     pub fn new() -> anyhow::Result<Self> {
@@ -378,20 +419,220 @@ impl QqClient {
         Ok(result)
     }
 
-    pub async fn audio_url(&self, songmid: &str, cookie_header: Option<&str>) -> Result<String, AppError> {
+    pub async fn audio_url(
+        &self,
+        songmid: &str,
+        quality: AudioQualityId,
+        song_id: Option<&str>,
+        media_mid: Option<&str>,
+        cookie_header: Option<&str>,
+    ) -> Result<ResolvedAudioUrl, AppError> {
+        let detail = self
+            .quality_source(songmid, song_id, media_mid)
+            .await
+            .unwrap_or_else(|_| QualitySource::minimal(songmid));
+        for candidate in quality_fallbacks(quality) {
+            if let Some(url) = self
+                .try_quality_url(songmid, &detail.media_mid, candidate, cookie_header)
+                .await?
+            {
+                return Ok(ResolvedAudioUrl {
+                    url,
+                    quality: candidate,
+                });
+            }
+        }
+        Err(AppError::NotFound("track is not playable from QQ Music".into()))
+    }
+
+    pub async fn audio_qualities(
+        &self,
+        songmid: &str,
+        selected: AudioQualityId,
+        song_id: Option<&str>,
+        media_mid: Option<&str>,
+        cookie_header: Option<&str>,
+    ) -> Result<AudioQualitiesResp, AppError> {
+        let detail = self.quality_source(songmid, song_id, media_mid).await?;
+        let mut qualities = Vec::new();
+        for spec in QUALITY_SPECS {
+            let available = self
+                .try_quality_url(songmid, &detail.media_mid, spec.id, cookie_header)
+                .await?
+                .is_some();
+            qualities.push(AudioQualityDto {
+                id: spec.id,
+                label: spec.label.to_string(),
+                detail: spec.detail.to_string(),
+                size_bytes: quality_size(&detail.file, spec.id),
+                available,
+                selected: spec.id == selected,
+                requires_login: spec.requires_login,
+            });
+        }
+        Ok(AudioQualitiesResp {
+            songmid: songmid.to_string(),
+            selected,
+            qualities,
+        })
+    }
+
+    pub async fn song_comments(
+        &self,
+        song_id: &str,
+        page: u32,
+        limit: u32,
+        cookie_header: Option<&str>,
+    ) -> Result<SongCommentsResp, AppError> {
+        if song_id.trim().is_empty() {
+            return Err(AppError::bad_request("songId is required"));
+        }
+        let song_id = song_id.trim();
+        let page_size = limit.clamp(1, 50);
+        let body = json!({
+            "comm": {
+                "cv": 4747474,
+                "ct": 24,
+                "format": "json",
+                "inCharset": "utf-8",
+                "outCharset": "utf-8",
+                "notice": 0,
+                "platform": "yqq.json",
+                "needNewCode": 1,
+                "uin": 0,
+                "g_tk_new_20200303": 5381,
+                "g_tk": 5381
+            },
+            "count": {
+                "method": "GetCommentCount",
+                "module": "GlobalComment.GlobalCommentReadServer",
+                "param": {
+                    "request_list": [{
+                        "biz_type": 1,
+                        "biz_id": song_id,
+                        "biz_sub_type": 0
+                    }]
+                }
+            },
+            "new_comments": {
+                "method": "GetNewCommentList",
+                "module": "music.globalComment.CommentReadServer",
+                "param": {
+                    "BizType": 1,
+                    "BizId": song_id,
+                    "LastCommentSeqNo": "",
+                    "PageSize": page_size,
+                    "PageNum": page,
+                    "FromCommentId": "",
+                    "WithHot": 1
+                }
+            },
+            "hot_comments": {
+                "method": "GetHotCommentList",
+                "module": "music.globalComment.CommentReadServer",
+                "param": {
+                    "BizType": 1,
+                    "BizId": song_id,
+                    "LastCommentSeqNo": "",
+                    "PageSize": page_size.min(15),
+                    "PageNum": 0,
+                    "HotType": 2,
+                    "WithAirborne": 1
+                }
+            }
+        });
+        let value = self.qq(self.client.post(MUSICU).json(&body), cookie_header).await?;
+        ensure_qq_ok(&value, "load song comments")?;
+        let comments = comment_list(
+            value
+                .pointer("/new_comments/data/CommentList3/Comments")
+                .or_else(|| value.pointer("/new_comments/data/CommentList/Comments")),
+        );
+        let hot_comments = comment_list(value.pointer("/hot_comments/data/CommentList/Comments"));
+        let total = value
+            .pointer("/count/data/response_list/0/count")
+            .and_then(Value::as_u64)
+            .or_else(|| value.pointer("/new_comments/data/TotalCmNum").and_then(Value::as_u64))
+            .unwrap_or((comments.len() + hot_comments.len()) as u64);
+        let hot_total = value
+            .pointer("/hot_comments/data/CommentList/Total")
+            .and_then(Value::as_u64)
+            .unwrap_or(hot_comments.len() as u64);
+        Ok(SongCommentsResp {
+            song_id: song_id.to_string(),
+            total,
+            hot_total,
+            comments,
+            hot_comments,
+            has_more: value
+                .pointer("/new_comments/data/CommentList/HasMore")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                > 0,
+        })
+    }
+
+    async fn quality_source(
+        &self,
+        songmid: &str,
+        song_id: Option<&str>,
+        media_mid: Option<&str>,
+    ) -> Result<QualitySource, AppError> {
+        let track = self.song_detail(songmid, song_id).await.unwrap_or(Value::Null);
+        let file = track.get("file").cloned().unwrap_or(Value::Null);
+        let media_mid = media_mid
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| str_at(&file, &["media_mid", "mediaMid"]).map(str::to_string))
+            .unwrap_or_else(|| songmid.to_string());
+        Ok(QualitySource { media_mid, file })
+    }
+
+    async fn song_detail(&self, songmid: &str, song_id: Option<&str>) -> Result<Value, AppError> {
+        let song_id_value = song_id
+            .filter(|value| !value.trim().is_empty())
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        let body = json!({
+            "comm": { "ct": 24, "cv": 0 },
+            "songinfo": {
+                "method": "get_song_detail_yqq",
+                "module": "music.pf_song_detail_svr",
+                "param": {
+                    "song_type": 0,
+                    "song_mid": songmid,
+                    "song_id": song_id_value,
+                }
+            }
+        });
+        let data = self.qq(self.client.post(MUSICU).json(&body), None).await?;
+        data.pointer("/songinfo/data/track_info")
+            .cloned()
+            .ok_or_else(|| AppError::NotFound("song detail not found".into()))
+    }
+
+    async fn try_quality_url(
+        &self,
+        songmid: &str,
+        media_mid: &str,
+        quality: AudioQualityId,
+        cookie_header: Option<&str>,
+    ) -> Result<Option<String>, AppError> {
+        let filenames = quality_filenames(quality, media_mid);
+        let songmids = vec![songmid; filenames.len()];
+        let songtypes = vec![0_u8; filenames.len()];
         let uin = cookie_header
-            .and_then(qq_uin_from_cookie)
+            .and_then(qq_login_uin_from_cookie)
             .unwrap_or_else(|| "0".to_string());
-        let file = format!("M500{songmid}{songmid}.mp3");
         let body = json!({
             "req_1": {
                 "module": "vkey.GetVkeyServer",
                 "method": "CgiGetVkey",
                 "param": {
-                    "filename": [file],
+                    "filename": filenames,
                     "guid": "10000",
-                    "songmid": [songmid],
-                    "songtype": [0],
+                    "songmid": songmids,
+                    "songtype": songtypes,
                     "uin": uin,
                     "loginflag": 1,
                     "platform": "20"
@@ -401,18 +642,26 @@ impl QqClient {
             "comm": { "uin": uin, "format": "json", "ct": 24, "cv": 0 }
         });
         let data = self.qq(self.client.post(MUSICU).json(&body), cookie_header).await?;
-        let purl = data
-            .pointer("/req_1/data/midurlinfo/0/purl")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if purl.is_empty() {
-            return Err(AppError::NotFound("track is not playable from QQ Music".into()));
-        }
         let sip = data
             .pointer("/req_1/data/sip/0")
             .and_then(Value::as_str)
             .unwrap_or("https://dl.stream.qqmusic.qq.com/");
-        Ok(format!("{sip}{purl}"))
+        let Some(items) = data.pointer("/req_1/data/midurlinfo").and_then(Value::as_array) else {
+            return Ok(None);
+        };
+        for item in items {
+            if item.get("result").and_then(Value::as_i64).unwrap_or(-1) != 0 {
+                continue;
+            }
+            if let Some(purl) = item
+                .get("purl")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+            {
+                return Ok(Some(format!("{sip}{purl}")));
+            }
+        }
+        Ok(None)
     }
 
     pub async fn lyric(&self, songmid: &str, cookie_header: Option<&str>) -> Result<String, AppError> {
@@ -684,6 +933,121 @@ fn string_or_number(value: Option<&Value>) -> Option<String> {
     value.as_i64().map(|number| number.to_string())
 }
 
+struct QualitySource {
+    media_mid: String,
+    file: Value,
+}
+
+impl QualitySource {
+    fn minimal(songmid: &str) -> Self {
+        Self {
+            media_mid: songmid.to_string(),
+            file: Value::Null,
+        }
+    }
+}
+
+fn quality_fallbacks(quality: AudioQualityId) -> Vec<AudioQualityId> {
+    match quality {
+        AudioQualityId::Master => vec![
+            AudioQualityId::Master,
+            AudioQualityId::Sq,
+            AudioQualityId::Hq,
+            AudioQualityId::Standard,
+        ],
+        AudioQualityId::Sq => vec![AudioQualityId::Sq, AudioQualityId::Hq, AudioQualityId::Standard],
+        AudioQualityId::Hq => vec![AudioQualityId::Hq, AudioQualityId::Standard],
+        AudioQualityId::Standard => vec![AudioQualityId::Standard],
+    }
+}
+
+fn quality_filenames(quality: AudioQualityId, media_mid: &str) -> Vec<String> {
+    match quality {
+        AudioQualityId::Standard => vec![format!("M500{media_mid}{media_mid}.mp3")],
+        AudioQualityId::Hq => vec![format!("M800{media_mid}{media_mid}.mp3")],
+        AudioQualityId::Sq => vec![format!("F000{media_mid}{media_mid}.flac")],
+        AudioQualityId::Master => vec![
+            format!("AI00{media_mid}{media_mid}.flac"),
+            format!("RS01{media_mid}{media_mid}.flac"),
+        ],
+    }
+}
+
+fn quality_size(file: &Value, quality: AudioQualityId) -> u64 {
+    match quality {
+        AudioQualityId::Standard => number_at(file, &["size_128mp3", "size128mp3"]),
+        AudioQualityId::Hq => number_at(file, &["size_320mp3", "size320mp3"]).or_else(|| size_new_at(file, 3)),
+        AudioQualityId::Sq => number_at(file, &["size_flac", "sizeFlac"]).or_else(|| size_new_at(file, 5)),
+        AudioQualityId::Master => number_at(file, &["size_hires", "sizeHires"]).or_else(|| size_new_at(file, 0)),
+    }
+    .unwrap_or(0)
+}
+
+fn size_new_at(file: &Value, index: usize) -> Option<u64> {
+    file.get("size_new")
+        .and_then(Value::as_array)
+        .and_then(|items| items.get(index))
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+}
+
+fn comment_list(value: Option<&Value>) -> Vec<SongCommentDto> {
+    value
+        .and_then(Value::as_array)
+        .map(|items| items.iter().map(convert_comment).collect())
+        .unwrap_or_default()
+}
+
+fn convert_comment(item: &Value) -> SongCommentDto {
+    let content = str_at(item, &["rootcommentcontent", "commentcontent", "Content"])
+        .unwrap_or("")
+        .to_string();
+    let replies = item
+        .get("middlecommentcontent")
+        .or_else(|| item.get("SubComments"))
+        .and_then(Value::as_array)
+        .map(|items| items.iter().map(convert_comment_reply).collect())
+        .unwrap_or_default();
+    SongCommentDto {
+        id: str_at(item, &["rootcommentid", "commentid", "CmId", "SeqNo"])
+            .unwrap_or("")
+            .to_string(),
+        nick: str_at(item, &["nick", "rootcommentnick", "Nick"])
+            .unwrap_or("")
+            .trim_start_matches('@')
+            .to_string(),
+        avatar_url: str_at(item, &["avatarurl", "Avatar"]).unwrap_or("").to_string(),
+        content,
+        like_count: number_at(item, &["praisenum", "likecount", "PraiseNum"]).unwrap_or(0),
+        published_at: number_at(item, &["time", "PubTime"]).unwrap_or(0),
+        location: str_at(item, &["iplocation", "location", "IPLocation", "Location"])
+            .unwrap_or("")
+            .to_string(),
+        vip_icon: str_at(item, &["vipicon", "VipIcon"]).unwrap_or("").to_string(),
+        identity_icon: str_at(item, &["identity_pic", "root_identity_pic", "IdentityPic"])
+            .unwrap_or("")
+            .to_string(),
+        is_hot: number_at(item, &["is_hot", "is_hot_cmt", "HotScore"]).unwrap_or(0) > 0,
+        replies,
+    }
+}
+
+fn convert_comment_reply(item: &Value) -> SongCommentReplyDto {
+    SongCommentReplyDto {
+        id: str_at(item, &["subcommentid", "CmId", "SeqNo"])
+            .unwrap_or("")
+            .to_string(),
+        nick: str_at(item, &["replynick", "Nick"])
+            .unwrap_or("")
+            .trim_start_matches('@')
+            .to_string(),
+        content: str_at(item, &["subcommentcontent", "Content"])
+            .unwrap_or("")
+            .to_string(),
+        like_count: number_at(item, &["praisenum", "likecount", "PraiseNum"]).unwrap_or(0),
+    }
+}
+
 pub fn qq_uin_from_cookie(cookie_header: &str) -> Option<String> {
     let mut wxuin = None;
     for part in cookie_header.split(';') {
@@ -706,6 +1070,15 @@ pub fn qq_uin_from_cookie(cookie_header: &str) -> Option<String> {
     })
 }
 
+fn qq_login_uin_from_cookie(cookie_header: &str) -> Option<String> {
+    qq_uin_from_cookie(cookie_header).map(|uin| {
+        uin.strip_prefix('o')
+            .unwrap_or(&uin)
+            .trim_start_matches('0')
+            .to_string()
+    })
+}
+
 pub fn cookie_hint(cookie_header: &str) -> Option<String> {
     qq_uin_from_cookie(cookie_header).map(|uin| {
         let suffix = uin
@@ -722,6 +1095,11 @@ pub fn cookie_hint(cookie_header: &str) -> Option<String> {
 
 fn convert_song(item: &Value) -> SongDto {
     let songmid = str_at(item, &["mid", "songmid", "song_mid"]).unwrap_or("").to_string();
+    let file = item.get("file").unwrap_or(&Value::Null);
+    let media_mid = str_at(file, &["media_mid", "mediaMid"])
+        .or_else(|| str_at(item, &["media_mid", "mediaMid"]))
+        .unwrap_or("")
+        .to_string();
     let song_id = number_at(item, &["id", "songid", "song_id"])
         .map(|value| value.to_string())
         .or_else(|| str_at(item, &["id", "songid", "song_id"]).map(str::to_string))
@@ -767,6 +1145,7 @@ fn convert_song(item: &Value) -> SongDto {
         id: format!("qqtrack_{songmid}"),
         song_id,
         songmid: songmid.clone(),
+        media_mid,
         title,
         artist,
         album,
@@ -776,6 +1155,10 @@ fn convert_song(item: &Value) -> SongDto {
         source_url: format!("https://y.qq.com/n/ryqq/songDetail/{songmid}"),
         vip,
         playable: !songmid.is_empty(),
+        size_128_mp3: quality_size(file, AudioQualityId::Standard),
+        size_320_mp3: quality_size(file, AudioQualityId::Hq),
+        size_flac: quality_size(file, AudioQualityId::Sq),
+        size_master: quality_size(file, AudioQualityId::Master),
     }
 }
 
@@ -940,7 +1323,11 @@ fn percent_encode(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::qq_uin_from_cookie;
+    use super::{
+        AudioQualityId, convert_comment, convert_song, qq_login_uin_from_cookie, qq_uin_from_cookie, quality_filenames,
+        quality_size,
+    };
+    use serde_json::json;
 
     #[test]
     fn parses_uin_cookie() {
@@ -953,5 +1340,119 @@ mod tests {
     #[test]
     fn converts_wxuin_cookie_like_listen1() {
         assert_eq!(qq_uin_from_cookie("wxuin=o123456").as_deref(), Some("1123456"));
+    }
+
+    #[test]
+    fn converts_qq_login_uin_for_vkey() {
+        assert_eq!(
+            qq_login_uin_from_cookie("foo=bar; uin=o00123456; other=x").as_deref(),
+            Some("123456")
+        );
+    }
+
+    #[test]
+    fn builds_quality_filenames_from_media_mid() {
+        assert_eq!(
+            quality_filenames(AudioQualityId::Hq, "002E2qmX4TovcC"),
+            vec!["M800002E2qmX4TovcC002E2qmX4TovcC.mp3"]
+        );
+        assert_eq!(
+            quality_filenames(AudioQualityId::Master, "002E2qmX4TovcC"),
+            vec![
+                "AI00002E2qmX4TovcC002E2qmX4TovcC.flac",
+                "RS01002E2qmX4TovcC002E2qmX4TovcC.flac"
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_quality_sizes_from_qq_file_payload() {
+        let file = json!({
+            "media_mid": "002E2qmX4TovcC",
+            "size_128mp3": 4_216_943,
+            "size_320mp3": 10_432_933,
+            "size_flac": 59_173_376,
+            "size_new": [182_812_770, 0, 0, 10_432_933, 0, 59_173_376]
+        });
+        assert_eq!(quality_size(&file, AudioQualityId::Standard), 4_216_943);
+        assert_eq!(quality_size(&file, AudioQualityId::Hq), 10_432_933);
+        assert_eq!(quality_size(&file, AudioQualityId::Sq), 59_173_376);
+        assert_eq!(quality_size(&file, AudioQualityId::Master), 182_812_770);
+    }
+
+    #[test]
+    fn converts_song_quality_metadata() {
+        let song = convert_song(&json!({
+            "mid": "0037vqfJ0s0Zlq",
+            "id": 569717827,
+            "name": "天下识君",
+            "singer": [{"name": "王朝1982"}],
+            "album": {"name": "天下识君", "mid": "0030"},
+            "interval": 248,
+            "file": {
+                "media_mid": "002E2qmX4TovcC",
+                "size_128mp3": 4216943,
+                "size_320mp3": 10432933,
+                "size_flac": 59173376,
+                "size_new": [182812770]
+            }
+        }));
+        assert_eq!(song.media_mid, "002E2qmX4TovcC");
+        assert_eq!(song.size_128_mp3, 4216943);
+        assert_eq!(song.size_320_mp3, 10432933);
+        assert_eq!(song.size_flac, 59173376);
+        assert_eq!(song.size_master, 182812770);
+    }
+
+    #[test]
+    fn converts_comment_payload() {
+        let comment = convert_comment(&json!({
+            "rootcommentid": "root-1",
+            "rootcommentnick": "@流浪的蛙蛙",
+            "rootcommentcontent": "打卡！[em]x[/em] 期待",
+            "praisenum": 417,
+            "time": 1766816968,
+            "avatarurl": "https://example.test/avatar.jpg",
+            "vipicon": "https://example.test/vip.png",
+            "iplocation": "江苏",
+            "is_hot": 1,
+            "middlecommentcontent": [{
+                "subcommentid": "sub-1",
+                "replynick": "@QQ音乐",
+                "subcommentcontent": "欢迎",
+                "praisenum": 2
+            }]
+        }));
+        assert_eq!(comment.id, "root-1");
+        assert_eq!(comment.nick, "流浪的蛙蛙");
+        assert_eq!(comment.like_count, 417);
+        assert!(comment.is_hot);
+        assert_eq!(comment.replies[0].nick, "QQ音乐");
+    }
+
+    #[test]
+    fn converts_musicu_comment_payload() {
+        let comment = convert_comment(&json!({
+            "CmId": "root-2",
+            "Nick": "流浪的蛙蛙",
+            "Content": "打卡！🐸🐸🐸🐸",
+            "PraiseNum": 417,
+            "PubTime": 1742957316,
+            "Avatar": "https://example.test/avatar.jpg",
+            "IdentityPic": "https://example.test/identity.png",
+            "SubComments": [{
+                "CmId": "sub-2",
+                "Nick": "腾驹摘陌上的星辰",
+                "Content": "哇蛙蛙！！！",
+                "PraiseNum": 7
+            }]
+        }));
+        assert_eq!(comment.id, "root-2");
+        assert_eq!(comment.nick, "流浪的蛙蛙");
+        assert_eq!(comment.content, "打卡！🐸🐸🐸🐸");
+        assert_eq!(comment.like_count, 417);
+        assert_eq!(comment.published_at, 1742957316);
+        assert_eq!(comment.replies[0].nick, "腾驹摘陌上的星辰");
+        assert_eq!(comment.replies[0].like_count, 7);
     }
 }

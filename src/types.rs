@@ -7,6 +7,7 @@ pub struct SongDto {
     pub id: String,
     pub song_id: String,
     pub songmid: String,
+    pub media_mid: String,
     pub title: String,
     pub artist: String,
     pub album: String,
@@ -16,6 +17,10 @@ pub struct SongDto {
     pub source_url: String,
     pub vip: bool,
     pub playable: bool,
+    pub size_128_mp3: u64,
+    pub size_320_mp3: u64,
+    pub size_flac: u64,
+    pub size_master: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -129,4 +134,69 @@ pub struct LyricWordDto {
     pub start_ms: u64,
     pub end_ms: u64,
     pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioQualityId {
+    Standard,
+    Hq,
+    Sq,
+    Master,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioQualityDto {
+    pub id: AudioQualityId,
+    pub label: String,
+    pub detail: String,
+    pub size_bytes: u64,
+    pub available: bool,
+    pub selected: bool,
+    pub requires_login: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioQualitiesResp {
+    pub songmid: String,
+    pub selected: AudioQualityId,
+    pub qualities: Vec<AudioQualityDto>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SongCommentReplyDto {
+    pub id: String,
+    pub nick: String,
+    pub content: String,
+    pub like_count: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SongCommentDto {
+    pub id: String,
+    pub nick: String,
+    pub avatar_url: String,
+    pub content: String,
+    pub like_count: u64,
+    pub published_at: u64,
+    pub location: String,
+    pub vip_icon: String,
+    pub identity_icon: String,
+    pub is_hot: bool,
+    pub replies: Vec<SongCommentReplyDto>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SongCommentsResp {
+    pub song_id: String,
+    pub total: u64,
+    pub hot_total: u64,
+    pub comments: Vec<SongCommentDto>,
+    pub hot_comments: Vec<SongCommentDto>,
+    pub has_more: bool,
 }

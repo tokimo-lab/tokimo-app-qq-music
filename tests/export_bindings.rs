@@ -6,8 +6,9 @@ use std::{
 };
 
 use tokimo_app_qq_music::types::{
-    AuthStatusResp, LikeSongResp, LikedSongsResp, LyricLineDto, LyricSource, LyricWordDto, LyricsResp, MyPlaylistsResp,
-    PlaylistDetailResp, PlaylistDto, RecommendPlaylistsResp, SaveCookieReq, SearchResp, SongDto, UserDto,
+    AudioQualitiesResp, AudioQualityDto, AudioQualityId, AuthStatusResp, LikeSongResp, LikedSongsResp, LyricLineDto,
+    LyricSource, LyricWordDto, LyricsResp, MyPlaylistsResp, PlaylistDetailResp, PlaylistDto, RecommendPlaylistsResp,
+    SaveCookieReq, SearchResp, SongCommentDto, SongCommentReplyDto, SongCommentsResp, SongDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
@@ -32,11 +33,20 @@ fn export_bindings() {
     write_binding::<LyricWordDto>(&cfg, &dir, "LyricWordDto.ts");
     write_binding::<LyricLineDto>(&cfg, &dir, "LyricLineDto.ts");
     write_binding::<LyricsResp>(&cfg, &dir, "LyricsResp.ts");
+    write_binding::<AudioQualityId>(&cfg, &dir, "AudioQualityId.ts");
+    write_binding::<AudioQualityDto>(&cfg, &dir, "AudioQualityDto.ts");
+    write_binding::<AudioQualitiesResp>(&cfg, &dir, "AudioQualitiesResp.ts");
+    write_binding::<SongCommentReplyDto>(&cfg, &dir, "SongCommentReplyDto.ts");
+    write_binding::<SongCommentDto>(&cfg, &dir, "SongCommentDto.ts");
+    write_binding::<SongCommentsResp>(&cfg, &dir, "SongCommentsResp.ts");
 
     fs::write(
         dir.join("index.ts"),
         [
             "export type { AuthStatusResp } from \"./AuthStatusResp\";",
+            "export type { AudioQualitiesResp } from \"./AudioQualitiesResp\";",
+            "export type { AudioQualityDto } from \"./AudioQualityDto\";",
+            "export type { AudioQualityId } from \"./AudioQualityId\";",
             "export type { LikedSongsResp } from \"./LikedSongsResp\";",
             "export type { LikeSongResp } from \"./LikeSongResp\";",
             "export type { LyricLineDto } from \"./LyricLineDto\";",
@@ -49,6 +59,9 @@ fn export_bindings() {
             "export type { RecommendPlaylistsResp } from \"./RecommendPlaylistsResp\";",
             "export type { SaveCookieReq } from \"./SaveCookieReq\";",
             "export type { SearchResp } from \"./SearchResp\";",
+            "export type { SongCommentDto } from \"./SongCommentDto\";",
+            "export type { SongCommentReplyDto } from \"./SongCommentReplyDto\";",
+            "export type { SongCommentsResp } from \"./SongCommentsResp\";",
             "export type { SongDto } from \"./SongDto\";",
             "export type { UserDto } from \"./UserDto\";",
             "",

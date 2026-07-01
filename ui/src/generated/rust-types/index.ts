@@ -1,4 +1,7 @@
 export type { AuthStatusResp } from "./AuthStatusResp";
+export type { AudioQualitiesResp } from "./AudioQualitiesResp";
+export type { AudioQualityDto } from "./AudioQualityDto";
+export type { AudioQualityId } from "./AudioQualityId";
 export type { LikedSongsResp } from "./LikedSongsResp";
 export type { LikeSongResp } from "./LikeSongResp";
 export type { LyricLineDto } from "./LyricLineDto";
@@ -11,5 +14,8 @@ export type { PlaylistDto } from "./PlaylistDto";
 export type { RecommendPlaylistsResp } from "./RecommendPlaylistsResp";
 export type { SaveCookieReq } from "./SaveCookieReq";
 export type { SearchResp } from "./SearchResp";
+export type { SongCommentDto } from "./SongCommentDto";
+export type { SongCommentReplyDto } from "./SongCommentReplyDto";
+export type { SongCommentsResp } from "./SongCommentsResp";
 export type { SongDto } from "./SongDto";
 export type { UserDto } from "./UserDto";

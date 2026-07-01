@@ -29,6 +29,6 @@ pre-commit:
 pre-push:
   commands:
     fmt-check:
-      run: cargo fmt -p tokimo-app-apple-music -- --check
+      run: cargo fmt -p tokimo-app-qq-music -- --check
     clippy:
-      run: cargo clippy -p tokimo-app-apple-music --bins --tests -- -D warnings
+      run: cargo clippy -p tokimo-app-qq-music --bins --tests -- -D warnings

@@ -1,23 +1,20 @@
-import type { MediaCenterSnapshot } from "@tokimo/sdk";
+import type { MediaCenterSnapshot, MediaTrack, RepeatMode } from "@tokimo/sdk";
 import {
   ChevronDown,
   Heart,
-  ListMusic,
-  MessageCircle,
   MoreHorizontal,
   Pause,
   Play,
   Shirt,
-  Shuffle,
   SkipBack,
   SkipForward,
-  Volume2,
   Waves,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { imageProxyUrl } from "../api/client";
-import type { LyricsResp, SongDto } from "../types/domain";
+import type { AudioQualityId, LyricsResp, SongDto } from "../types/domain";
 import { duration } from "./format";
+import { CommentsControl, PlaybackModeControl, QualityControl, QueueControl, VolumeControl } from "./PlaybackMenus";
 
 interface NowPlayingViewProps {
   snapshot: MediaCenterSnapshot | null;
@@ -30,9 +27,38 @@ interface NowPlayingViewProps {
   onNext: () => void;
   onSeek: (ms: number) => void;
   onToggleLike: () => void;
+  quality: AudioQualityId;
+  onSetShuffle: (on: boolean) => void;
+  onSetRepeat: (mode: RepeatMode) => void;
+  onSetVolume: (volume: number) => void;
+  onSetQuality: (quality: AudioQualityId) => void;
+  onSkipToIndex: (index: number) => void;
+  onSetQueue: (queue: MediaTrack[], startIndex?: number) => void;
+  onClearQueue: () => void;
+  onLargeOverlayChange?: (open: boolean) => void;
 }
 
-export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onToggle, onPrev, onNext, onSeek, onToggleLike }: NowPlayingViewProps) {
+export function NowPlayingView({
+  snapshot,
+  current,
+  lyrics,
+  liked,
+  onClose,
+  onToggle,
+  onPrev,
+  onNext,
+  onSeek,
+  onToggleLike,
+  quality,
+  onSetShuffle,
+  onSetRepeat,
+  onSetVolume,
+  onSetQuality,
+  onSkipToIndex,
+  onSetQueue,
+  onClearQueue,
+  onLargeOverlayChange,
+}: NowPlayingViewProps) {
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
   const reportedCurrentMs = active?.currentTimeMs ?? 0;
@@ -72,16 +98,40 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
   const activeIndexRef = useRef(activeIndex);
   const [entered, setEntered] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<"mode" | "volume" | "quality" | "queue" | "comments" | null>(null);
   const previewLine = previewIndex === null ? null : displayLines[previewIndex];
   const showPreviewSeek = timedLines.length > 0 && previewIndex !== null && previewIndex !== activeIndex && !!previewLine;
   const highlightedIndex = previewIndex ?? activeIndex;
   const visibleLyricStart = Math.max(0, highlightedIndex - 1);
   const visibleLyricLines = displayLines.slice(visibleLyricStart, visibleLyricStart + 8);
+  const menuProps = {
+    snapshot,
+    current,
+    liked,
+    quality,
+    openMenu,
+    onOpenMenu: setOpenMenu,
+    onSetShuffle,
+    onSetRepeat,
+    onSetVolume,
+    onSetQuality,
+    onSkipToIndex,
+    onSetQueue,
+    onClearQueue,
+    onToggleLike,
+    iconClass: "h-[24px] w-[24px]",
+  };
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    const largeOverlayOpen = openMenu === "queue" || openMenu === "comments";
+    onLargeOverlayChange?.(largeOverlayOpen);
+    return () => onLargeOverlayChange?.(false);
+  }, [openMenu, onLargeOverlayChange]);
 
   useEffect(() => {
     activeIndexRef.current = activeIndex;
@@ -221,7 +271,7 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
 
       <main className="absolute inset-0">
         <div className="absolute left-[206px] top-[198px] h-[258px] w-[278px] rounded-[30px] bg-white/92" style={{ boxShadow: `32px 34px 54px ${theme.shadow}` }}>
-          <div className="absolute left-[26px] top-[25px] h-[218px] w-[218px] rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.72)_0_18%,rgba(255,255,255,0)_19%),radial-gradient(circle_at_center,rgba(98,132,104,0.36)_0_54%,rgba(238,225,215,0.34)_62%,rgba(255,255,255,0)_70%),repeating-radial-gradient(circle_at_center,rgba(206,214,199,0.75)_0_5px,rgba(250,250,246,0.58)_6px_10px)] shadow-[inset_0_0_18px_rgba(0,0,0,0.08),0_12px_28px_rgba(0,0,0,0.14)]">
+          <div className="absolute left-[26px] top-[25px] h-[218px] w-[218px] rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.55)_0_17%,rgba(255,255,255,0)_18%),radial-gradient(circle_at_43%_42%,rgba(246,248,248,0.62)_0_32%,rgba(255,255,255,0)_48%),conic-gradient(from_42deg,rgba(142,151,159,0.48),rgba(226,231,233,0.54),rgba(152,162,170,0.50),rgba(222,227,230,0.52),rgba(142,151,159,0.48)),repeating-radial-gradient(circle_at_center,rgba(114,125,134,0.14)_0_1px,rgba(251,251,249,0.16)_2px_5px)] shadow-[inset_0_0_18px_rgba(0,0,0,0.08),0_12px_28px_rgba(0,0,0,0.14)]">
             <div
               className="qq-disc-rotor absolute left-[44px] top-[44px] h-[130px] w-[130px] overflow-hidden rounded-full border-[18px] border-[#4c3b31] bg-[#4c3b31] shadow-[0_6px_15px_rgba(0,0,0,0.26)]"
               style={{
@@ -238,7 +288,7 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
             <div className="h-[18px] w-[18px] rounded-full bg-white shadow-inner" />
           </div>
           <div className="absolute left-[218px] top-[190px] h-[21px] w-[21px] rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.18)]" />
-          <div className="absolute right-[12px] bottom-[16px] flex h-[24px] w-[24px] items-center justify-center rounded-full bg-white text-[12px] font-bold" style={{ color: QQ_ACCENT }}>
+          <div className="absolute right-[12px] bottom-[16px] flex h-[24px] w-[24px] items-center justify-center rounded-full bg-white text-[12px] font-bold" style={{ color: QQ_GREEN }}>
             Q
           </div>
         </div>
@@ -246,7 +296,7 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
         <div className="absolute left-[560px] top-[160px] w-[380px] text-center">
           <div className="flex items-center justify-center gap-2">
             <h1 className="text-[18px] leading-[23px] font-semibold text-black/92">{current?.title ?? "QQ音乐"}</h1>
-            <span className="rounded-[5px] border-2 px-[7px] text-[12px] leading-[16px] font-semibold" style={{ borderColor: QQ_ACCENT, color: QQ_ACCENT }}>
+            <span className="rounded-[5px] border-2 px-[7px] text-[12px] leading-[16px] font-semibold" style={{ borderColor: QQ_GREEN, color: QQ_GREEN }}>
               VIP
             </span>
           </div>
@@ -282,7 +332,7 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
                     active={index === highlightedIndex}
                     progress={lineProgress}
                     currentMs={currentMs}
-                    accent={QQ_ACCENT}
+                    accent={QQ_BLUE}
                     top={visibleIndex * 34}
                   />
                 );
@@ -315,7 +365,7 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
             <span className="mx-1 text-black/40">-</span>
             <span className="text-black/50">{current?.artist ?? "QQ音乐"}</span>
           </div>
-          <span className="rounded-[4px] border px-[6px] text-[10px] leading-[13px] font-semibold" style={{ borderColor: QQ_ACCENT, color: QQ_ACCENT }}>
+          <span className="rounded-[4px] border px-[6px] text-[10px] leading-[13px] font-semibold" style={{ borderColor: QQ_GREEN, color: QQ_GREEN }}>
             VIP
           </span>
         </div>
@@ -334,21 +384,30 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
         <button type="button" className={`absolute left-[76px] top-[77px] cursor-pointer ${liked ? "text-[#ff6c6c]" : "text-black/42 hover:text-[#ff6c6c]"}`} onClick={onToggleLike}>
           <Heart className={`h-[24px] w-[24px] ${liked ? "fill-current" : ""}`} />
         </button>
-        <MessageCircle className="absolute left-[119px] top-[78px] h-[24px] w-[24px] text-black/45" />
+        <div className="absolute left-[119px] top-[78px]">
+          <CommentsControl
+            {...menuProps}
+            commentsButtonClass="relative cursor-pointer text-black/45 hover:text-[#3d8cff]"
+            commentsPopoverClass="left-[420px] bottom-[46px]"
+            commentsPopoverFrameClass="h-[597px] w-[470px]"
+            commentsPopoverBodyClass="p-5"
+            iconClass="h-[24px] w-[24px]"
+          />
+        </div>
         <MoreHorizontal className="absolute left-[167px] top-[80px] h-[24px] w-[24px] text-black/45" />
 
         <div className="absolute left-[398px] top-[42px] flex h-[42px] w-[254px] items-center justify-center gap-[25px]">
-          <Shuffle className="h-[20px] w-[20px] text-black/82" />
+          <PlaybackModeControl {...menuProps} modeButtonClass="cursor-pointer text-black/82 hover:text-black" iconClass="h-[20px] w-[20px]" />
           <button type="button" className="cursor-pointer" onClick={onPrev}>
             <SkipBack className="h-[24px] w-[24px] fill-current text-black/90" />
           </button>
-          <button type="button" className="flex h-[40px] w-[40px] cursor-pointer items-center justify-center rounded-full text-white" style={{ background: QQ_ACCENT }} onClick={onToggle}>
+          <button type="button" className="flex h-[40px] w-[40px] cursor-pointer items-center justify-center rounded-full text-white" style={{ background: QQ_BLUE }} onClick={onToggle}>
             {isPlaying ? <Pause className="h-[19px] w-[19px] fill-current" /> : <Play className="h-[21px] w-[21px] translate-x-0.5 fill-current" />}
           </button>
           <button type="button" className="cursor-pointer" onClick={onNext}>
             <SkipForward className="h-[24px] w-[24px] fill-current text-black/90" />
           </button>
-          <Volume2 className="h-[24px] w-[24px] text-black/78" />
+          <VolumeControl {...menuProps} volumeButtonClass="cursor-pointer text-black/78 hover:text-black" iconClass="h-[24px] w-[24px]" />
         </div>
 
         <div className="absolute left-[362px] top-[87px] flex items-center gap-[10px] text-[12px] leading-[18px] text-black/50">
@@ -367,12 +426,23 @@ export function NowPlayingView({ snapshot, current, lyrics, liked, onClose, onTo
 
         <div className="absolute right-[20px] top-[72px] flex items-center gap-[25px] text-black/60">
           <Shirt className="h-[23px] w-[23px]" />
-          <span className="rounded-[5px] border-2 px-[9px] text-[12px] leading-[18px]" style={{ borderColor: QQ_ACCENT, color: QQ_ACCENT }}>
-            HQ
-          </span>
+          <QualityControl
+            {...menuProps}
+            qualityButtonClass="cursor-pointer rounded-[5px] border-2 border-[#3d8cff] px-[9px] text-[12px] leading-[18px] text-[#3d8cff]"
+            qualityLabelClass=""
+            preloadQuality
+          />
           <Waves className="h-[26px] w-[26px]" />
           <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border-2 border-black/42 text-[15px] leading-none">词</span>
-          <ListMusic className="h-[26px] w-[26px]" />
+          <QueueControl
+            {...menuProps}
+            queueButtonClass="cursor-pointer text-black/60 hover:text-[#3d8cff]"
+            queuePopoverClass="left-[-423px] bottom-[46px]"
+            queuePopoverFrameClass="h-[597px] w-[448px]"
+            queuePopoverBodyClass="px-5 pt-8 pb-0"
+            queueVariant="full"
+            iconClass="h-[26px] w-[26px]"
+          />
         </div>
       </footer>
     </div>
@@ -535,7 +605,8 @@ function parseLyric(value: string): LyricLine[] {
   return result;
 }
 
-const QQ_ACCENT = "#90c82f";
+const QQ_BLUE = "#3d8cff";
+const QQ_GREEN = "#8ccf22";
 const QQ_PROGRESS = "#11110f";
 const QQ_TEXT = "rgb(21 18 14)";
 
@@ -643,7 +714,7 @@ function themeFromRgb(color: RgbColor): PlayerTheme {
   const bgS = clamp(hsl.s * 100 * 0.66 + 24, 28, 58);
   const hue = Math.round(hsl.h);
   const yellowHue = Math.round((hsl.h + 336) % 360);
-  const warmHue = Math.round((hsl.h + 300) % 360);
+  const warmHue = Math.round((hsl.h + 150) % 360);
 
   return {
     background: [

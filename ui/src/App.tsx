@@ -10,7 +10,7 @@ import { PlayerBar } from "./components/PlayerBar";
 import { PlaylistView } from "./components/PlaylistView";
 import { SearchView } from "./components/SearchView";
 import { Sidebar } from "./components/Sidebar";
-import type { AuthStatusResp, LyricsResp, PlaylistDetailResp, PlaylistDto, SearchResp, SongDto } from "./types/domain";
+import type { AudioQualityId, AuthStatusResp, LyricsResp, PlaylistDetailResp, PlaylistDto, SearchResp, SongDto } from "./types/domain";
 
 type View = "home" | "playlist" | "search";
 
@@ -36,9 +36,11 @@ export default function App() {
   const [loginSaving, setLoginSaving] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  const [nowPlayingLargeOverlayOpen, setNowPlayingLargeOverlayOpen] = useState(false);
   const [lastSong, setLastSong] = useState<SongDto | null>(null);
   const [lyrics, setLyrics] = useState<LyricsResp | null>(null);
   const [likedSongmids, setLikedSongmids] = useState<Set<string>>(() => new Set());
+  const [selectedQuality, setSelectedQuality] = useState<AudioQualityId>("hq");
 
   const activeSnapshot = snapshot?.providerId === PROVIDER_ID ? snapshot : null;
   const currentSong = useMemo(() => currentSongFromSnapshot(activeSnapshot) ?? lastSong, [activeSnapshot, lastSong]);
@@ -48,17 +50,27 @@ export default function App() {
     if (!mediaApi) return;
     return mediaApi.registerProvider(PROVIDER_ID, {
       displayName: "QQ音乐",
-      resolveAudioUrl: (track) => audioUrl(track.id),
+      resolveAudioUrl: (track) => {
+        const song = songFromTrack(track);
+        if (!song) throw new Error("QQ Music track is missing song metadata");
+        return audioUrl(song, qualityFromTrack(track) ?? selectedQuality);
+      },
       onTrackChanged: (track) => {
         const song = songFromTrack(track);
         if (song) setLastSong(song);
       },
     });
-  }, [mediaApi]);
+  }, [mediaApi, selectedQuality]);
 
   useEffect(() => {
     void initialLoad();
   }, []);
+
+  useEffect(() => {
+    ctx.shell.windowManager.updateMetadata(ctx.shell.windowManager.currentWindowId, {
+      qqMusicLargeOverlayOpen: nowPlayingOpen && nowPlayingLargeOverlayOpen,
+    });
+  }, [ctx.shell.windowManager, nowPlayingLargeOverlayOpen, nowPlayingOpen]);
 
   useEffect(() => {
     if (!currentSong?.songmid) {
@@ -182,10 +194,37 @@ export default function App() {
     if (playable.length === 0) return;
     const selected = songs[startIndex];
     const realIndex = Math.max(0, playable.findIndex((song) => song.songmid === selected?.songmid));
-    const queue = playable.map(trackFromSong);
+    const queue = playable.map((song) => trackFromSong(song, selectedQuality));
     const first = playable[realIndex] ?? playable[0];
     setLastSong(first ?? null);
     await mediaApi.play({ providerId: PROVIDER_ID, queue, startIndex: realIndex });
+  }
+
+  async function changeQuality(quality: AudioQualityId): Promise<void> {
+    setSelectedQuality(quality);
+    if (!mediaApi || !activeSnapshot || activeSnapshot.queue.length === 0) return;
+    const queue = activeSnapshot.queue.map((track) => {
+      const song = songFromTrack(track);
+      if (!song) return { ...track, meta: { ...track.meta, quality } };
+      return trackFromSong(song, quality);
+    });
+    const wasPlaying = activeSnapshot.isPlaying;
+    await mediaApi.play({
+      providerId: PROVIDER_ID,
+      queue,
+      startIndex: activeSnapshot.currentIndex,
+      startTimeMs: activeSnapshot.currentTimeMs,
+    });
+    if (!wasPlaying) mediaApi.pause();
+  }
+
+  function clearQueue(): void {
+    const api = mediaApi as (typeof mediaApi & { clearQueue?: () => void }) | null;
+    if (api?.clearQueue) {
+      api.clearQueue();
+      return;
+    }
+    mediaApi?.pause();
   }
 
   const togglePlay = useCallback(() => {
@@ -296,6 +335,14 @@ export default function App() {
           onSeek={(ms) => mediaApi?.seek(ms)}
           onNowPlaying={() => setNowPlayingOpen(true)}
           onToggleLike={() => currentSong && void toggleLike(currentSong)}
+          quality={selectedQuality}
+          onSetShuffle={(on) => mediaApi?.setShuffle(on)}
+          onSetRepeat={(mode) => mediaApi?.setRepeat(mode)}
+          onSetVolume={(volume) => mediaApi?.setVolume(volume)}
+          onSetQuality={(quality) => void changeQuality(quality)}
+          onSkipToIndex={(index) => mediaApi?.skipToIndex(index)}
+          onSetQueue={(queue, startIndex) => mediaApi?.setQueue(queue, startIndex)}
+          onClearQueue={clearQueue}
         />
       </main>
 
@@ -312,13 +359,22 @@ export default function App() {
           onNext={() => mediaApi?.next()}
           onSeek={(ms) => mediaApi?.seek(ms)}
           onToggleLike={() => currentSong && void toggleLike(currentSong)}
+          quality={selectedQuality}
+          onSetShuffle={(on) => mediaApi?.setShuffle(on)}
+          onSetRepeat={(mode) => mediaApi?.setRepeat(mode)}
+          onSetVolume={(volume) => mediaApi?.setVolume(volume)}
+          onSetQuality={(quality) => void changeQuality(quality)}
+          onSkipToIndex={(index) => mediaApi?.skipToIndex(index)}
+          onSetQueue={(queue, startIndex) => mediaApi?.setQueue(queue, startIndex)}
+          onClearQueue={clearQueue}
+          onLargeOverlayChange={setNowPlayingLargeOverlayOpen}
         />
       )}
     </div>
   );
 }
 
-function trackFromSong(song: SongDto): MediaTrack {
+function trackFromSong(song: SongDto, quality: AudioQualityId): MediaTrack {
   return {
     id: song.songmid,
     title: song.title,
@@ -326,7 +382,7 @@ function trackFromSong(song: SongDto): MediaTrack {
     album: song.album,
     artworkUrl: song.artworkUrl,
     durationMs: song.durationMs,
-    meta: { song },
+    meta: { song, quality },
   };
 }
 
@@ -340,6 +396,11 @@ function songFromTrack(track: MediaTrack): SongDto | null {
   const value = track.meta?.song;
   if (isSongDto(value)) return value;
   return null;
+}
+
+function qualityFromTrack(track: MediaTrack): AudioQualityId | null {
+  const value = track.meta?.quality;
+  return value === "standard" || value === "hq" || value === "sq" || value === "master" ? value : null;
 }
 
 function isSongDto(value: unknown): value is SongDto {
