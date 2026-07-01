@@ -12,9 +12,10 @@ interface NowPlayingViewProps {
   onToggle: () => void;
   onPrev: () => void;
   onNext: () => void;
+  onSeek: (ms: number) => void;
 }
 
-export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, onPrev, onNext }: NowPlayingViewProps) {
+export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, onPrev, onNext, onSeek }: NowPlayingViewProps) {
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
   const currentMs = active?.currentTimeMs ?? 0;
@@ -53,6 +54,13 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
     window.setTimeout(onClose, 220);
   }
 
+  function handleSeek(event: React.MouseEvent<HTMLDivElement>) {
+    if (totalMs <= 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    onSeek(ratio * totalMs);
+  }
+
   return (
     <div
       className="absolute inset-0 z-40 flex flex-col bg-[#dcfbf8] text-slate-900"
@@ -75,8 +83,8 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
           <div className="absolute right-5 bottom-5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold text-emerald-500">Q</div>
         </div>
         <div className="w-[520px] text-center">
-          <h1 className="text-2xl font-semibold">{current?.title ?? "QQ音乐"}</h1>
-          <div className="mt-2 text-lg text-slate-600">{current?.artist ?? "未播放"}</div>
+          <h1 className="text-[24px] leading-8 font-semibold">{current?.title ?? "QQ音乐"}</h1>
+          <div className="mt-2 text-[16px] leading-6 text-slate-600">{current?.artist ?? "未播放"}</div>
           <div className="relative mt-8 h-[340px]">
             <div
               className="qq-scrollbar h-full overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-28 text-slate-500"
@@ -91,7 +99,7 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
                   ref={(node) => {
                     lineRefs.current[index] = node;
                   }}
-                  className={`py-2 text-2xl leading-relaxed transition-all duration-300 ${
+                  className={`py-2 text-[24px] leading-[2.1] transition-all duration-300 ${
                     index === activeIndex ? "scale-[1.08] font-semibold text-emerald-500" : "opacity-70"
                   }`}
                 >
@@ -102,46 +110,48 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
           </div>
         </div>
       </main>
-      <footer className="flex h-28 items-center px-14">
+      <footer className="flex h-24 items-center px-12">
         <div className="flex w-80 items-center gap-4">
           <div className="min-w-0">
-            <div className="truncate font-medium">{current?.title ?? "未播放"}</div>
-            <div className="truncate text-sm text-slate-500">{current?.artist ?? "QQ音乐"}</div>
+            <div className="truncate text-[15px] leading-5 font-medium">{current?.title ?? "未播放"}</div>
+            <div className="truncate text-[13px] leading-5 text-slate-500">{current?.artist ?? "QQ音乐"}</div>
           </div>
-          <Heart className="h-6 w-6 fill-red-400 text-red-400" />
-          <MessageCircle className="h-6 w-6 text-slate-500" />
-          <MoreHorizontal className="h-6 w-6 text-slate-500" />
+          <Heart className="h-5 w-5 fill-red-400 text-red-400" />
+          <MessageCircle className="h-5 w-5 text-slate-500" />
+          <MoreHorizontal className="h-5 w-5 text-slate-500" />
         </div>
         <div className="flex flex-1 flex-col items-center">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-7">
             <Shuffle className="h-5 w-5 text-slate-600" />
             <button type="button" className="cursor-pointer" onClick={onPrev}>
-              <SkipBack className="h-6 w-6 fill-current" />
+              <SkipBack className="h-[22px] w-[22px] fill-current" />
             </button>
-            <button type="button" className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-emerald-400 text-white" onClick={onToggle}>
+            <button type="button" className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-emerald-400 text-white" onClick={onToggle}>
               {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 translate-x-0.5 fill-current" />}
             </button>
             <button type="button" className="cursor-pointer" onClick={onNext}>
-              <SkipForward className="h-6 w-6 fill-current" />
+              <SkipForward className="h-[22px] w-[22px] fill-current" />
             </button>
-            <Volume2 className="h-6 w-6 text-slate-600" />
+            <Volume2 className="h-[22px] w-[22px] text-slate-600" />
           </div>
-          <div className="mt-4 flex w-full max-w-[520px] items-center gap-3 text-xs text-slate-500">
+          <div className="mt-3 flex w-full max-w-[520px] items-center gap-3 text-[12px] text-slate-500">
             <span>{duration(currentMs)}</span>
-            <div className="relative h-1 flex-1 rounded-full bg-slate-300/80">
-              <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-400" style={{ width: `${progressPercent}%` }} />
-              <div
-                className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400 shadow-sm"
-                style={{ left: `${progressPercent}%` }}
-              />
+            <div className="h-4 flex-1 cursor-pointer py-[6px]" onClick={handleSeek}>
+              <div className="relative h-[3px] rounded-full bg-slate-300/80">
+                <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-400" style={{ width: `${progressPercent}%` }} />
+                <div
+                  className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400 shadow-sm"
+                  style={{ left: `${progressPercent}%` }}
+                />
+              </div>
             </div>
             <span>{duration(totalMs)}</span>
           </div>
         </div>
-        <div className="flex w-80 justify-end gap-7 text-slate-600">
-          <span className="rounded border border-emerald-500 px-2 text-emerald-500">HQ</span>
-          <span>词</span>
-          <ListMusic className="h-6 w-6" />
+        <div className="flex w-80 justify-end gap-6 text-slate-600">
+          <span className="rounded border border-emerald-500 px-2 text-[12px] leading-5 text-emerald-500">HQ</span>
+          <span className="text-[13px] leading-5">词</span>
+          <ListMusic className="h-5 w-5" />
         </div>
       </footer>
     </div>

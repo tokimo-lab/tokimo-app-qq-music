@@ -261,6 +261,7 @@ export default function App() {
           onToggle={togglePlay}
           onPrev={() => mediaApi?.previous()}
           onNext={() => mediaApi?.next()}
+          onSeek={(ms) => mediaApi?.seek(ms)}
         />
       )}
     </div>
