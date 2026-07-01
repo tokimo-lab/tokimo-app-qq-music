@@ -43,8 +43,16 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
     return index;
   }, [currentMs, displayLines, timedLines.length]);
   const lineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
+  const lyricViewportRef = useRef<HTMLDivElement | null>(null);
+  const restoreTimerRef = useRef<number | null>(null);
+  const suppressScrollUntilRef = useRef(0);
+  const manualScrollUntilRef = useRef(0);
+  const activeIndexRef = useRef(activeIndex);
   const [entered, setEntered] = useState(false);
-  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const previewLine = previewIndex === null ? null : displayLines[previewIndex];
+  const showPreviewSeek = timedLines.length > 0 && previewIndex !== null && previewIndex !== activeIndex && !!previewLine;
+  const highlightedIndex = previewIndex ?? activeIndex;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
@@ -52,8 +60,26 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
   }, []);
 
   useEffect(() => {
-    lineRefs.current[activeIndex]?.scrollIntoView({ block: "center", behavior: "smooth" });
+    activeIndexRef.current = activeIndex;
   }, [activeIndex]);
+
+  useEffect(() => {
+    if (previewIndex !== null) return;
+    if (Date.now() < manualScrollUntilRef.current) return;
+    scrollLineToCenter(activeIndex, "smooth");
+  }, [activeIndex, previewIndex]);
+
+  useEffect(() => {
+    setPreviewIndex(null);
+    manualScrollUntilRef.current = 0;
+    suppressScrollUntilRef.current = Date.now() + 1600;
+  }, [current?.songmid, lyric]);
+
+  useEffect(() => {
+    return () => {
+      if (restoreTimerRef.current !== null) window.clearTimeout(restoreTimerRef.current);
+    };
+  }, []);
 
   function handleClose() {
     setEntered(false);
@@ -76,6 +102,72 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
     if ((event.buttons & 1) === 0) return;
     seekFromClientX(event.currentTarget, event.clientX);
   }
+
+  function scrollLineToCenter(index: number, behavior: ScrollBehavior) {
+    const node = lineRefs.current[index];
+    if (!node) return;
+    suppressScrollUntilRef.current = Date.now() + 1600;
+    node.scrollIntoView({ block: "center", behavior });
+  }
+
+  function lockManualLyricScroll() {
+    suppressScrollUntilRef.current = 0; manualScrollUntilRef.current = Date.now() + 3000;
+  }
+
+  function previewLineFromScroll() {
+    const viewport = lyricViewportRef.current;
+    if (!viewport || timedLines.length === 0) return;
+    if (Date.now() < suppressScrollUntilRef.current) return;
+    manualScrollUntilRef.current = Date.now() + 3000;
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const center = viewportRect.top + viewportRect.height / 2;
+    let nextIndex = activeIndex;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < displayLines.length; index += 1) {
+      const node = lineRefs.current[index];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      const distance = Math.abs(rect.top + rect.height / 2 - center);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        nextIndex = index;
+      }
+    }
+
+    setPreviewIndex(nextIndex);
+    if (restoreTimerRef.current !== null) window.clearTimeout(restoreTimerRef.current);
+    restoreTimerRef.current = window.setTimeout(() => {
+      setPreviewIndex(null);
+      manualScrollUntilRef.current = 0;
+      scrollLineToCenter(activeIndexRef.current, "smooth");
+    }, 3000);
+  }
+
+  function seekFromPreview() {
+    if (!previewLine) return;
+    onSeek(previewLine.timeMs);
+    setPreviewIndex(null);
+    manualScrollUntilRef.current = 0;
+    if (restoreTimerRef.current !== null) {
+      window.clearTimeout(restoreTimerRef.current);
+      restoreTimerRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    const node = lyricViewportRef.current;
+    if (!node) return;
+    const onScroll = () => previewLineFromScroll(), onManual = () => lockManualLyricScroll();
+    node.addEventListener("scroll", onScroll, { passive: true });
+    node.addEventListener("wheel", onManual, { passive: true });
+    node.addEventListener("pointerdown", onManual);
+    node.addEventListener("touchstart", onManual, { passive: true });
+    return () => {
+      node.removeEventListener("scroll", onScroll); node.removeEventListener("wheel", onManual);
+      node.removeEventListener("pointerdown", onManual); node.removeEventListener("touchstart", onManual);
+    };
+  }, [activeIndex, displayLines, timedLines.length]);
 
   return (
     <div
@@ -125,6 +217,7 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
           <div className="mt-2 text-[16px] leading-6 text-black/55">{current?.artist ?? "未播放"}</div>
           <div className="relative mt-9 h-[350px]">
             <div
+              ref={lyricViewportRef}
               className="qq-scrollbar h-full overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-28 text-black/50"
               style={{
                 WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)",
@@ -135,8 +228,11 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
                 const nextLine = displayLines[index + 1];
                 const lineEnd = nextLine?.timeMs ?? totalMs;
                 const currentLineDuration = Math.max(1200, lineEnd - line.timeMs);
-                const lineProgress =
-                  index === activeIndex && timedLines.length > 0 ? Math.max(0, Math.min(1, (currentMs - line.timeMs) / currentLineDuration)) : 0;
+                const playbackProgress =
+                  index === activeIndex && timedLines.length > 0 && (previewIndex === null || previewIndex === activeIndex)
+                    ? Math.max(0, Math.min(1, (currentMs - line.timeMs) / currentLineDuration))
+                    : 0;
+                const lineProgress = previewIndex === index && previewIndex !== activeIndex ? 1 : playbackProgress;
                 return (
                   <LyricRow
                     key={`${line.timeMs}-${line.text}-${index}`}
@@ -144,18 +240,26 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
                       lineRefs.current[index] = node;
                     }}
                     line={line}
-                    active={index === activeIndex}
+                    active={index === highlightedIndex}
                     progress={lineProgress}
                     accent={theme.accent}
-                    seekable={timedLines.length > 0}
-                    showSeek={hoveredLine === index}
-                    onPointerEnter={() => setHoveredLine(index)}
-                    onPointerLeave={() => setHoveredLine((currentValue) => (currentValue === index ? null : currentValue))}
-                    onSeek={() => onSeek(line.timeMs)}
                   />
                 );
               })}
             </div>
+            {showPreviewSeek && (
+              <button
+                type="button"
+                className="absolute top-1/2 left-0 z-20 flex h-10 -translate-y-1/2 cursor-pointer items-center gap-3 rounded-full px-1 text-[22px] leading-8 font-medium text-black/62 transition-opacity"
+                onClick={seekFromPreview}
+                aria-label={`从 ${lyricTime(previewLine.timeMs)} 开始播放`}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white shadow-lg">
+                  <Play className="h-4 w-4 translate-x-0.5 fill-current" />
+                </span>
+                <span className="tabular-nums">{lyricTime(previewLine.timeMs)}</span>
+              </button>
+            )}
           </div>
         </div>
       </main>
@@ -211,48 +315,26 @@ export function NowPlayingView({ snapshot, current, lyric, liked, onClose, onTog
   );
 }
 
-interface LyricLine {
-  timeMs: number;
-  text: string;
-}
+interface LyricLine { timeMs: number; text: string }
 
 interface LyricRowProps {
   line: LyricLine;
   active: boolean;
   progress: number;
   accent: string;
-  seekable: boolean;
-  showSeek: boolean;
   refSetter: (node: HTMLParagraphElement | null) => void;
-  onPointerEnter: () => void;
-  onPointerLeave: () => void;
-  onSeek: () => void;
 }
 
-function LyricRow({ line, active, progress, accent, seekable, showSeek, refSetter, onPointerEnter, onPointerLeave, onSeek }: LyricRowProps) {
+function LyricRow({ line, active, progress, accent, refSetter }: LyricRowProps) {
   const textClass = active ? "font-semibold text-black/70" : "font-medium text-black/42";
   const rowStyle = active ? ({ "--qq-lyric-accent": accent } as CSSProperties) : undefined;
-  const lineTime = lyricTime(line.timeMs);
 
   return (
-    <div className="group relative flex min-h-[54px] items-center justify-center" onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
-      {seekable && (
-        <button
-          type="button"
-          className={`absolute left-2 flex h-8 cursor-pointer items-center gap-2 rounded-full bg-black/75 px-2.5 text-[12px] text-white shadow-lg transition-all duration-150 ${
-            showSeek ? "translate-x-0 opacity-100" : "-translate-x-2 opacity-0"
-          }`}
-          onClick={onSeek}
-          aria-label={`从 ${lineTime} 开始播放`}
-        >
-          <Play className="h-3.5 w-3.5 fill-current" />
-          <span className="tabular-nums">{lineTime}</span>
-        </button>
-      )}
+    <div className="relative flex min-h-[48px] items-center justify-center">
       <p
         ref={refSetter}
-        className={`relative max-w-full overflow-hidden px-24 py-1 text-center text-[25px] leading-[46px] tracking-normal transition-all duration-200 ${
-          active ? "scale-[1.03]" : ""
+        className={`relative max-w-full overflow-hidden px-24 py-1 text-center text-[22px] leading-[40px] tracking-normal transition-all duration-200 ${
+          active ? "scale-[1.02]" : ""
         }`}
         style={rowStyle}
       >
@@ -274,7 +356,7 @@ function lyricTime(ms: number): string {
   const total = Math.round(ms / 1000);
   const min = Math.floor(total / 60);
   const sec = total % 60;
-  return `${min}:${sec.toString().padStart(2, "0")}`;
+  return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
 }
 
 function parseLyric(value: string): LyricLine[] {
@@ -295,12 +377,7 @@ function parseLyric(value: string): LyricLine[] {
   return result.sort((a, b) => a.timeMs - b.timeMs);
 }
 
-interface PlayerTheme {
-  background: string;
-  text: string;
-  accent: string;
-  shadow: string;
-}
+interface PlayerTheme { background: string; text: string; accent: string; shadow: string }
 
 const DEFAULT_THEME: PlayerTheme = {
   background: "linear-gradient(135deg, #fff8df 0%, #ffe8d6 54%, #ffeadf 100%)",
@@ -380,17 +457,9 @@ function extractDominantColor(image: HTMLImageElement): RgbColor {
   };
 }
 
-interface RgbColor {
-  r: number;
-  g: number;
-  b: number;
-}
+interface RgbColor { r: number; g: number; b: number }
 
-interface HslColor {
-  h: number;
-  s: number;
-  l: number;
-}
+interface HslColor { h: number; s: number; l: number }
 
 function themeFromRgb(color: RgbColor): PlayerTheme {
   const hsl = rgbToHsl(color);
