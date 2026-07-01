@@ -3,6 +3,7 @@ import { useMediaCenter } from "@tokimo/sdk/react";
 import { ChevronLeft, ChevronRight, Music2, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, audioUrl } from "./api/client";
+import { HomeView } from "./components/HomeView";
 import { LoginDialog } from "./components/LoginDialog";
 import { NowPlayingView } from "./components/NowPlayingView";
 import { PlayerBar } from "./components/PlayerBar";
@@ -11,7 +12,7 @@ import { SearchView } from "./components/SearchView";
 import { Sidebar } from "./components/Sidebar";
 import type { AuthStatusResp, PlaylistDetailResp, PlaylistDto, SearchResp, SongDto } from "./types/domain";
 
-type View = "playlist" | "search";
+type View = "home" | "playlist" | "search";
 
 const PROVIDER_ID = "qq-music";
 
@@ -30,7 +31,7 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<SearchResp | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [view, setView] = useState<View>("playlist");
+  const [view, setView] = useState<View>("home");
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginSaving, setLoginSaving] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -82,9 +83,9 @@ export default function App() {
     setRecommended(recommendValue);
     if (authValue?.isLogin) {
       await refreshAccountPlaylists();
+    } else {
+      setView("home");
     }
-    const first = recommendValue[0];
-    if (first) void openPlaylist(first.id);
   }
 
   async function refreshAccountPlaylists(): Promise<void> {
@@ -92,7 +93,11 @@ export default function App() {
       const data = await api.myPlaylists();
       const merged = [...data.created, ...data.favorite];
       setAccountPlaylists(merged);
-      if (merged[0] && !selectedPlaylistId) void openPlaylist(merged[0].id);
+      if (merged[0] && !selectedPlaylistId) {
+        void openPlaylist(merged[0].id);
+      } else if (!selectedPlaylistId) {
+        setView("home");
+      }
     } catch {
       setAccountPlaylists([]);
     }
@@ -150,6 +155,9 @@ export default function App() {
   async function logout(): Promise<void> {
     setAuth(await api.logout());
     setAccountPlaylists([]);
+    setSelectedPlaylistId(undefined);
+    setPlaylist(null);
+    setView("home");
   }
 
   async function playSongs(songs: SongDto[], startIndex: number): Promise<void> {
@@ -175,56 +183,60 @@ export default function App() {
       <Sidebar
         auth={auth}
         accountPlaylists={accountPlaylists}
-        recommended={recommended}
         selectedId={selectedPlaylistId}
         onLogin={() => setLoginOpen(true)}
         onLogout={() => void logout()}
+        onHome={() => setView("home")}
         onOpenPlaylist={(id) => void openPlaylist(id)}
         onSearchFocus={() => searchRef.current?.focus()}
       />
-      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-xl bg-neutral-900">
-        <header className="absolute top-0 right-0 left-0 z-10 flex h-16 items-center gap-5 bg-neutral-900/90 px-10 backdrop-blur">
-          <ChevronLeft className="h-7 w-7 text-neutral-500" />
-          <ChevronRight className="h-7 w-7 text-neutral-700" />
-          <form className="relative w-[320px]" onSubmit={(event) => void doSearch(event)}>
-            <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-neutral-500" />
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索音乐"
-              className="h-10 w-full rounded-xl bg-neutral-800 pr-4 pl-12 text-sm outline-none placeholder:text-neutral-500 focus:ring-1 focus:ring-emerald-400"
-            />
-          </form>
-          <div className="ml-2 flex h-9 w-9 items-center justify-center rounded-full border border-neutral-700">
-            <Music2 className="h-6 w-6 text-emerald-400" />
-          </div>
-        </header>
+      <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-[#121212] p-3 pl-0">
+        <section className="relative min-h-0 flex-1 overflow-hidden rounded-[14px] bg-[#1e1e1e]">
+          <header className="absolute top-0 right-0 left-0 z-10 flex h-16 items-center gap-5 bg-[#1e1e1e]/90 px-10 backdrop-blur">
+            <ChevronLeft className="h-7 w-7 text-neutral-500" />
+            <ChevronRight className="h-7 w-7 text-neutral-700" />
+            <form className="relative w-[320px]" onSubmit={(event) => void doSearch(event)}>
+              <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-neutral-500" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索音乐"
+                className="h-10 w-full rounded-xl bg-neutral-800 pr-4 pl-12 text-sm outline-none placeholder:text-neutral-500 focus:ring-1 focus:ring-emerald-400"
+              />
+            </form>
+            <div className="ml-2 flex h-9 w-9 items-center justify-center rounded-full border border-neutral-700">
+              <Music2 className="h-6 w-6 text-emerald-400" />
+            </div>
+          </header>
 
-        {view === "playlist" ? (
-          <PlaylistView
-            detail={playlist}
-            loading={playlistLoading}
-            error={playlistError}
-            currentSongmid={currentSongmid}
-            isPlaying={activeSnapshot?.isPlaying ?? false}
-            onPlayAll={() => void playSongs(playlist?.tracks ?? [], 0)}
-            onPlayTrack={(index) => void playSongs(playlist?.tracks ?? [], index)}
-            onPause={() => mediaApi?.pause()}
-          />
-        ) : (
-          <SearchView
-            query={query}
-            results={searchResults}
-            loading={searchLoading}
-            error={searchError}
-            currentSongmid={currentSongmid}
-            isPlaying={activeSnapshot?.isPlaying ?? false}
-            onPlaySong={(index) => void playSongs(searchResults?.songs ?? [], index)}
-            onPause={() => mediaApi?.pause()}
-            onOpenPlaylist={(id) => void openPlaylist(id)}
-          />
-        )}
+          {view === "home" ? (
+            <HomeView recommended={recommended} onOpenPlaylist={(id) => void openPlaylist(id)} onLogin={() => setLoginOpen(true)} />
+          ) : view === "playlist" ? (
+            <PlaylistView
+              detail={playlist}
+              loading={playlistLoading}
+              error={playlistError}
+              currentSongmid={currentSongmid}
+              isPlaying={activeSnapshot?.isPlaying ?? false}
+              onPlayAll={() => void playSongs(playlist?.tracks ?? [], 0)}
+              onPlayTrack={(index) => void playSongs(playlist?.tracks ?? [], index)}
+              onPause={() => mediaApi?.pause()}
+            />
+          ) : (
+            <SearchView
+              query={query}
+              results={searchResults}
+              loading={searchLoading}
+              error={searchError}
+              currentSongmid={currentSongmid}
+              isPlaying={activeSnapshot?.isPlaying ?? false}
+              onPlaySong={(index) => void playSongs(searchResults?.songs ?? [], index)}
+              onPause={() => mediaApi?.pause()}
+              onOpenPlaylist={(id) => void openPlaylist(id)}
+            />
+          )}
+        </section>
 
         <PlayerBar
           snapshot={snapshot}

@@ -9,17 +9,13 @@ interface TrackTableProps {
   onPlay: (index: number) => void;
   onPause: () => void;
   dense?: boolean;
+  showHeader?: boolean;
 }
 
-export function TrackTable({ tracks, currentSongmid, isPlaying, onPlay, onPause, dense = false }: TrackTableProps) {
+export function TrackTable({ tracks, currentSongmid, isPlaying, onPlay, onPause, dense = false, showHeader = true }: TrackTableProps) {
   return (
     <div className="w-full">
-      <div className="grid grid-cols-[minmax(260px,1fr)_48px_minmax(160px,0.5fr)_88px] gap-4 px-3 pb-2 text-xs text-neutral-500">
-        <span>歌名/歌手</span>
-        <span />
-        <span>专辑</span>
-        <span>时长</span>
-      </div>
+      {showHeader && <TrackTableHeader />}
       <div className="space-y-1">
         {tracks.map((track, index) => {
           const current = track.songmid === currentSongmid;
@@ -70,6 +66,17 @@ export function TrackTable({ tracks, currentSongmid, isPlaying, onPlay, onPause,
   );
 }
 
+export function TrackTableHeader() {
+  return (
+    <div className="grid grid-cols-[minmax(260px,1fr)_48px_minmax(160px,0.5fr)_88px] gap-4 px-3 pb-2 text-xs text-neutral-500">
+      <span>歌名/歌手</span>
+      <span />
+      <span>专辑</span>
+      <span>时长</span>
+    </div>
+  );
+}
+
 function Badge({ label, tone }: { label: string; tone: "green" | "gold" | "gray" }) {
   const cls =
     tone === "green"
@@ -79,4 +86,3 @@ function Badge({ label, tone }: { label: string; tone: "green" | "gold" | "gray"
         : "border-neutral-500 text-neutral-400";
   return <span className={`shrink-0 rounded border px-1 text-[10px] leading-4 ${cls}`}>{label}</span>;
 }
-

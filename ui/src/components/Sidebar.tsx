@@ -1,13 +1,13 @@
-import { Clock3, Download, Heart, Home, ListMusic, LogIn, Music2, Plus, Search, ShoppingBag } from "lucide-react";
+import { Clock3, Compass, Download, Gamepad2, Home, ListMusic, LogIn, Music2, Plus, Search, Settings, Shirt } from "lucide-react";
 import type { AuthStatusResp, PlaylistDto } from "../types/domain";
 
 interface SidebarProps {
   auth: AuthStatusResp | null;
   accountPlaylists: PlaylistDto[];
-  recommended: PlaylistDto[];
   selectedId?: string;
   onLogin: () => void;
   onLogout: () => void;
+  onHome: () => void;
   onOpenPlaylist: (id: string) => void;
   onSearchFocus: () => void;
 }
@@ -15,37 +15,51 @@ interface SidebarProps {
 export function Sidebar({
   auth,
   accountPlaylists,
-  recommended,
   selectedId,
   onLogin,
   onLogout,
+  onHome,
   onOpenPlaylist,
   onSearchFocus,
 }: SidebarProps) {
   const user = auth?.user;
-  const visiblePlaylists = accountPlaylists.length > 0 ? accountPlaylists : recommended.slice(0, 5);
+  const isLogin = auth?.isLogin ?? false;
+  const visiblePlaylists = isLogin ? accountPlaylists : [];
 
   return (
     <aside className="flex w-[244px] shrink-0 flex-col bg-neutral-950 text-neutral-300">
-      <div className="flex h-24 items-center gap-3 px-5">
+      <button type="button" className="flex h-24 cursor-pointer items-center gap-3 px-5 text-left" onClick={isLogin ? undefined : onLogin}>
         {user?.avatar ? (
           <img src={user.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-xl font-bold text-neutral-950">
-            QQ
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 text-xl font-bold text-white">
+            ♪
           </div>
         )}
         <div className="min-w-0">
-          <div className="truncate text-base font-semibold text-white">{user?.nickname ?? "QQ音乐"}</div>
-          <div className="mt-1 flex gap-1 text-[10px]">
-            <span className="rounded border border-amber-400/70 px-1 text-amber-300">{user?.vipLabel || "SVIP7 年"}</span>
-            <span className="rounded bg-purple-500/70 px-1 text-white">48勋章</span>
-          </div>
+          <div className="truncate text-base font-semibold text-white">{user?.nickname ?? "点击登录"}</div>
+          {isLogin && (
+            <div className="mt-1 flex gap-1 text-[10px]">
+              <span className="rounded border border-amber-400/70 px-1 text-amber-300">{user?.vipLabel || "VIP"}</span>
+              <span className="rounded bg-purple-500/70 px-1 text-white">QQ音乐</span>
+            </div>
+          )}
         </div>
-      </div>
+      </button>
+
+      {!isLogin && (
+        <button
+          type="button"
+          className="mx-5 mb-5 flex h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-xl bg-neutral-900 px-3 text-sm font-medium text-neutral-100 hover:bg-neutral-800"
+          onClick={onLogin}
+        >
+          <span className="min-w-0 flex-1 truncate whitespace-nowrap">会员畅听VIP曲库</span>
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-emerald-400 px-3 py-1.5 text-sm font-semibold text-neutral-950">立即开通</span>
+        </button>
+      )}
 
       <div className="grid grid-cols-2 gap-3 px-5">
-        <button className="flex h-14 cursor-pointer items-center justify-center rounded-lg bg-neutral-900 hover:bg-neutral-800">
+        <button className="flex h-14 cursor-pointer items-center justify-center rounded-lg bg-neutral-900 hover:bg-neutral-800" onClick={onHome}>
           <Home className="h-5 w-5" />
         </button>
         <button
@@ -64,21 +78,22 @@ export function Sidebar({
       </button>
 
       <nav className="mt-9 space-y-6 px-7 text-sm">
-        <NavItem icon={<Heart />} label="喜欢" meta="372" />
-        <NavItem icon={<Clock3 />} label="最近播放" meta="500" />
+        {isLogin && <NavItem icon={<Music2 />} label="喜欢" meta={String(accountPlaylists.length)} />}
+        <NavItem icon={<Clock3 />} label="最近播放" />
         <NavItem icon={<Download />} label="本地和下载" />
-        <NavItem icon={<ShoppingBag />} label="已购音乐" meta="11" />
         <NavItem icon={<ListMusic />} label="试听列表" />
       </nav>
 
-      <div className="mt-9 flex items-center justify-between px-7 text-xs text-neutral-400">
-        <span>自建歌单</span>
-        <span className="text-neutral-600">|</span>
-        <span>收藏歌单</span>
-        <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      {isLogin && (
+        <div className="mt-9 flex items-center justify-between px-7 text-xs text-neutral-400">
+          <span>自建歌单</span>
+          <span className="text-neutral-600">|</span>
+          <span>收藏歌单</span>
+          <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="qq-scrollbar mt-3 flex-1 overflow-y-auto px-4 pb-4">
         {visiblePlaylists.map((playlist) => (
@@ -103,12 +118,17 @@ export function Sidebar({
       </div>
 
       <div className="flex h-16 items-center justify-between border-t border-white/5 px-6">
+        <div className="flex items-center gap-5 text-neutral-400">
+          <Settings className="h-5 w-5" />
+          <Shirt className="h-5 w-5" />
+          <Gamepad2 className="h-5 w-5" />
+        </div>
         <button type="button" className="cursor-pointer text-xs text-neutral-500 hover:text-white" onClick={auth?.isLogin ? onLogout : onLogin}>
-          {auth?.isLogin ? "退出登录" : "导入 QQ Cookie"}
+          {auth?.isLogin ? "退出" : <LogIn className="h-4 w-4" />}
         </button>
         {!auth?.isLogin && (
-          <button type="button" className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md bg-emerald-400 text-black" onClick={onLogin}>
-            <LogIn className="h-4 w-4" />
+          <button type="button" className="cursor-pointer text-neutral-400 hover:text-white" onClick={onSearchFocus}>
+            <Compass className="h-5 w-5" />
           </button>
         )}
       </div>
@@ -120,8 +140,7 @@ function NavItem({ icon, label, meta }: { icon: React.ReactElement; label: strin
   return (
     <div className="flex items-center gap-4 text-neutral-300">
       {icon}
-      <span>{label}{meta ? `·${meta}` : ""}</span>
+      <span className="whitespace-nowrap">{label}{meta ? `·${meta}` : ""}</span>
     </div>
   );
 }
-

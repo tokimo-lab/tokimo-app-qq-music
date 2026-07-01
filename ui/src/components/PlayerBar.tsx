@@ -28,8 +28,8 @@ export function PlayerBar({ snapshot, current, onToggle, onPrev, onNext, onSeek,
   }
 
   return (
-    <footer className="absolute right-3 bottom-3 left-[256px] z-20 flex h-20 items-center rounded-lg bg-neutral-950/95 px-4 text-neutral-200 shadow-2xl backdrop-blur">
-      <button type="button" className="flex w-[330px] min-w-0 cursor-pointer items-center gap-3 text-left" onClick={onNowPlaying}>
+    <footer className="flex h-[88px] shrink-0 items-center rounded-[14px] bg-[#181818] px-5 text-neutral-200">
+      <button type="button" className="flex w-[300px] min-w-0 max-w-[34%] shrink cursor-pointer items-center gap-3 text-left" onClick={onNowPlaying}>
         {current?.artworkUrl ? (
           <img src={current.artworkUrl} alt="" className="h-14 w-14 rounded object-cover" />
         ) : (
@@ -46,7 +46,7 @@ export function PlayerBar({ snapshot, current, onToggle, onPrev, onNext, onSeek,
         </div>
       </button>
 
-      <div className="flex flex-1 flex-col items-center justify-center">
+      <div className="flex min-w-[260px] flex-1 flex-col items-center justify-center px-5">
         <div className="flex items-center gap-7">
           <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
             <Shuffle className="h-5 w-5" />
@@ -79,7 +79,7 @@ export function PlayerBar({ snapshot, current, onToggle, onPrev, onNext, onSeek,
         </div>
       </div>
 
-      <div className="flex w-[260px] justify-end gap-5 text-neutral-400">
+      <div className="flex w-[220px] shrink-0 justify-end gap-5 text-neutral-400">
         <span className="rounded border border-emerald-400 px-2 py-0.5 text-xs text-emerald-400">HQ</span>
         <span className="text-xs">词</span>
         <ListMusic className="h-6 w-6" />
@@ -87,4 +87,3 @@ export function PlayerBar({ snapshot, current, onToggle, onPrev, onNext, onSeek,
     </footer>
   );
 }
-
