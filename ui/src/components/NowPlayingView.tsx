@@ -18,6 +18,8 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
   const active = snapshot?.providerId === "qq-music" ? snapshot : null;
   const isPlaying = active?.isPlaying ?? false;
   const currentMs = active?.currentTimeMs ?? 0;
+  const totalMs = active?.durationMs ?? current?.durationMs ?? 0;
+  const progressPercent = totalMs > 0 ? Math.min(100, Math.max(0, (currentMs / totalMs) * 100)) : 0;
   const timedLines = useMemo(() => parseLyric(lyric), [lyric]);
   const fallback = useMemo(
     () => ["如果只是一场梦", "那该有多好", "未だにあなたのことを夢にみる", "你依旧出现在我梦里"].map((text, index) => ({ text, timeMs: index * 4000 })),
@@ -75,20 +77,24 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
         <div className="w-[520px] text-center">
           <h1 className="text-2xl font-semibold">{current?.title ?? "QQ音乐"}</h1>
           <div className="mt-2 text-lg text-slate-600">{current?.artist ?? "未播放"}</div>
-          <div className="qq-scrollbar mt-8 h-[340px] overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-28 text-slate-500">
-            {displayLines.map((line, index) => (
-              <p
-                key={`${line.timeMs}-${line.text}-${index}`}
-                ref={(node) => {
-                  lineRefs.current[index] = node;
-                }}
-                className={`py-2 text-2xl leading-relaxed transition-all duration-300 ${
-                  index === activeIndex ? "scale-[1.08] font-semibold text-emerald-500" : "opacity-70"
-                }`}
-              >
-                {line.text}
-              </p>
-            ))}
+          <div className="relative mt-8 h-[340px]">
+            <div className="qq-scrollbar h-full overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-28 text-slate-500">
+              {displayLines.map((line, index) => (
+                <p
+                  key={`${line.timeMs}-${line.text}-${index}`}
+                  ref={(node) => {
+                    lineRefs.current[index] = node;
+                  }}
+                  className={`py-2 text-2xl leading-relaxed transition-all duration-300 ${
+                    index === activeIndex ? "scale-[1.08] font-semibold text-emerald-500" : "opacity-70"
+                  }`}
+                >
+                  {line.text}
+                </p>
+              ))}
+            </div>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/70 via-[#dcfbf8]/95 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/70 via-[#dcfbf8]/95 to-transparent" />
           </div>
         </div>
       </main>
@@ -117,9 +123,15 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
             <Volume2 className="h-6 w-6 text-slate-600" />
           </div>
           <div className="mt-4 flex w-full max-w-[520px] items-center gap-3 text-xs text-slate-500">
-            <span>{duration(active?.currentTimeMs ?? 0)}</span>
-            <div className="h-1 flex-1 rounded-full bg-slate-300" />
-            <span>{duration(active?.durationMs ?? current?.durationMs ?? 0)}</span>
+            <span>{duration(currentMs)}</span>
+            <div className="relative h-1 flex-1 rounded-full bg-slate-300/80">
+              <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-400" style={{ width: `${progressPercent}%` }} />
+              <div
+                className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400 shadow-sm"
+                style={{ left: `${progressPercent}%` }}
+              />
+            </div>
+            <span>{duration(totalMs)}</span>
           </div>
         </div>
         <div className="flex w-80 justify-end gap-7 text-slate-600">
