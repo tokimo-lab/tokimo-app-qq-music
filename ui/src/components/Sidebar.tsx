@@ -77,44 +77,46 @@ export function Sidebar({
         <Plus className="h-4 w-4" />
       </button>
 
-      <nav className="mt-9 space-y-6 px-7 text-sm">
-        {isLogin && <NavItem icon={<Music2 />} label="喜欢" meta={String(accountPlaylists.length)} />}
-        <NavItem icon={<Clock3 />} label="最近播放" />
-        <NavItem icon={<Download />} label="本地和下载" />
-        <NavItem icon={<ListMusic />} label="试听列表" />
-      </nav>
+      <div className="qq-scrollbar mt-9 flex-1 overflow-y-auto px-4 pb-4">
+        <nav className="space-y-6 px-3 text-sm">
+          {isLogin && <NavItem icon={<Music2 />} label="喜欢" meta={String(accountPlaylists.length)} />}
+          <NavItem icon={<Clock3 />} label="最近播放" />
+          <NavItem icon={<Download />} label="本地和下载" />
+          <NavItem icon={<ListMusic />} label="试听列表" />
+        </nav>
 
-      {isLogin && (
-        <div className="mt-9 flex items-center justify-between px-7 text-xs text-neutral-400">
-          <span>自建歌单</span>
-          <span className="text-neutral-600">|</span>
-          <span>收藏歌单</span>
-          <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
-            <Plus className="h-4 w-4" />
-          </button>
+        {isLogin && (
+          <div className="mt-9 flex items-center justify-between px-3 text-xs text-neutral-400">
+            <span>自建歌单</span>
+            <span className="text-neutral-600">|</span>
+            <span>收藏歌单</span>
+            <button type="button" className="cursor-pointer text-neutral-400 hover:text-white">
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="mt-3">
+          {visiblePlaylists.map((playlist) => (
+            <button
+              key={playlist.id}
+              type="button"
+              className={`mb-1 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition ${
+                selectedId === playlist.id ? "bg-neutral-800 text-white" : "hover:bg-neutral-900"
+              }`}
+              onClick={() => onOpenPlaylist(playlist.id)}
+            >
+              {playlist.coverImgUrl ? (
+                <img src={playlist.coverImgUrl} alt="" className="h-9 w-9 rounded object-cover" />
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded bg-neutral-800">
+                  <Music2 className="h-4 w-4" />
+                </div>
+              )}
+              <span className="min-w-0 truncate text-sm">{playlist.title}</span>
+            </button>
+          ))}
         </div>
-      )}
-
-      <div className="qq-scrollbar mt-3 flex-1 overflow-y-auto px-4 pb-4">
-        {visiblePlaylists.map((playlist) => (
-          <button
-            key={playlist.id}
-            type="button"
-            className={`mb-1 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition ${
-              selectedId === playlist.id ? "bg-neutral-800 text-white" : "hover:bg-neutral-900"
-            }`}
-            onClick={() => onOpenPlaylist(playlist.id)}
-          >
-            {playlist.coverImgUrl ? (
-              <img src={playlist.coverImgUrl} alt="" className="h-9 w-9 rounded object-cover" />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded bg-neutral-800">
-                <Music2 className="h-4 w-4" />
-              </div>
-            )}
-            <span className="min-w-0 truncate text-sm">{playlist.title}</span>
-          </button>
-        ))}
       </div>
 
       <div className="flex h-16 items-center justify-between border-t border-white/5 px-6">

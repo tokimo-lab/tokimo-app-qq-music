@@ -190,7 +190,7 @@ export default function App() {
         onOpenPlaylist={(id) => void openPlaylist(id)}
         onSearchFocus={() => searchRef.current?.focus()}
       />
-      <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-[#121212] p-3 pl-0">
+      <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-neutral-950 p-3 pl-0">
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] bg-[#1e1e1e]">
           <header className="flex h-16 shrink-0 items-center gap-5 bg-[#1e1e1e] px-10">
             <ChevronLeft className="h-7 w-7 text-neutral-500" />
