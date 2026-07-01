@@ -26,6 +26,8 @@ export function PlaylistView({
   onPause,
 }: PlaylistViewProps) {
   const [compact, setCompact] = useState(false);
+  const collapseAt = 148;
+  const expandAt = 24;
 
   if (loading) return <StateText text="加载歌单中" />;
   if (error) return <StateText text={error} />;
@@ -34,8 +36,11 @@ export function PlaylistView({
   const trackCount = detail.tracks.length || detail.info.count;
 
   function handleScroll(event: UIEvent<HTMLDivElement>) {
-    const next = event.currentTarget.scrollTop > 92;
-    setCompact((current) => (current === next ? current : next));
+    const scrollTop = event.currentTarget.scrollTop;
+    setCompact((current) => {
+      if (current) return scrollTop > expandAt;
+      return scrollTop > collapseAt;
+    });
   }
 
   return (
