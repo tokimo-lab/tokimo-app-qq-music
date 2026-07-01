@@ -14,7 +14,7 @@ use tokimo_bus_client::BusClient;
 use crate::{
     error::{ApiResponse, AppError, ok},
     openapi_client::OpenApiClient,
-    qq::{QqClient, cookie_hint},
+    qq::{LyricLookup, QqClient, cookie_hint},
     types::{
         AuthStatusResp, LikeSongResp, LikedSongsResp, LyricsResp, MyPlaylistsResp, RecommendPlaylistsResp,
         SaveCookieReq, SearchResp,
@@ -117,6 +117,16 @@ pub struct LimitParams {
 #[serde(rename_all = "camelCase")]
 pub struct UnlikeSongParams {
     pub song_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricsParams {
+    pub song_id: Option<String>,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration_ms: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -270,10 +280,20 @@ pub async fn lyrics(
     State(ctx): State<Arc<AppCtx>>,
     caller: AppCaller,
     Path(songmid): Path<String>,
+    Query(params): Query<LyricsParams>,
 ) -> Result<RespJson<ApiResponse<LyricsResp>>, AppError> {
     let cookie = read_qq_cookie(&ctx, &caller).await?;
-    let lyric = ctx.qq.lyric(&songmid, cookie.as_deref()).await.unwrap_or_default();
-    Ok(ok(LyricsResp { songmid, lyric }))
+    let lookup = params
+        .song_id
+        .filter(|value| !value.trim().is_empty())
+        .map(|song_id| LyricLookup {
+            song_id,
+            title: params.title.unwrap_or_default(),
+            artist: params.artist.unwrap_or_default(),
+            album: params.album.unwrap_or_default(),
+            duration_ms: params.duration_ms.unwrap_or_default(),
+        });
+    Ok(ok(ctx.qq.lyrics(&songmid, lookup, cookie.as_deref()).await))
 }
 
 pub async fn audio(

@@ -1,12 +1,18 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use axum::http::StatusCode;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use reqwest::{Client, RequestBuilder, header};
 use serde_json::{Value, json};
+use tokio::sync::OnceCell;
+use tracing::debug;
 
 use crate::{
     error::AppError,
-    types::{PlaylistDetailResp, PlaylistDto, RecommendPlaylistsResp, SearchResp, SongDto, UserDto},
+    qrc,
+    types::{
+        LyricSource, LyricsResp, PlaylistDetailResp, PlaylistDto, RecommendPlaylistsResp, SearchResp, SongDto, UserDto,
+    },
 };
 
 const MUSICU: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
@@ -17,6 +23,23 @@ const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_2) AppleW
 #[derive(Clone)]
 pub struct QqClient {
     client: Client,
+    lyric_session: Arc<OnceCell<LyricSession>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct LyricLookup {
+    pub song_id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub duration_ms: u64,
+}
+
+#[derive(Clone, Debug)]
+struct LyricSession {
+    uid: String,
+    sid: String,
+    userip: String,
 }
 
 impl QqClient {
@@ -26,7 +49,10 @@ impl QqClient {
             .redirect(reqwest::redirect::Policy::limited(10))
             .build()
             .map_err(|error| anyhow::anyhow!("reqwest build: {error}"))?;
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            lyric_session: Arc::new(OnceCell::new()),
+        })
     }
 
     pub async fn search(&self, keyword: &str, page: u32, limit: u32, types: &str) -> Result<SearchResp, AppError> {
@@ -397,6 +423,195 @@ impl QqClient {
         Ok(data.get("lyric").and_then(Value::as_str).unwrap_or("").to_string())
     }
 
+    pub async fn lyrics(&self, songmid: &str, lookup: Option<LyricLookup>, cookie_header: Option<&str>) -> LyricsResp {
+        if let Some(lookup) = lookup {
+            match self.qrc_lyrics(songmid, &lookup, cookie_header).await {
+                Ok(resp) if !resp.lines.is_empty() => return resp,
+                Ok(_) => debug!(songmid, "qq-music qrc lyrics empty, falling back to lrc"),
+                Err(error) => debug!(songmid, %error, "qq-music qrc lyrics failed, falling back to lrc"),
+            }
+        }
+
+        self.lrc_lyrics(songmid, cookie_header).await
+    }
+
+    async fn qrc_lyrics(
+        &self,
+        songmid: &str,
+        lookup: &LyricLookup,
+        cookie_header: Option<&str>,
+    ) -> Result<LyricsResp, AppError> {
+        let song_id = lookup
+            .song_id
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| AppError::bad_request("songId must be numeric for qrc lyrics"))?;
+        if lookup.title.trim().is_empty() || lookup.duration_ms == 0 {
+            return Err(AppError::bad_request(
+                "title and durationMs are required for qrc lyrics",
+            ));
+        }
+
+        let param = json!({
+            "albumName": BASE64.encode(lookup.album.as_bytes()),
+            "crypt": 1,
+            "ct": 19,
+            "cv": 2111,
+            "interval": lookup.duration_ms / 1000,
+            "lrc_t": 0,
+            "qrc": 1,
+            "qrc_t": 0,
+            "roma": 1,
+            "roma_t": 0,
+            "singerName": BASE64.encode(lookup.artist.as_bytes()),
+            "songID": song_id,
+            "songName": BASE64.encode(lookup.title.as_bytes()),
+            "trans": 1,
+            "trans_t": 0,
+            "type": 0,
+        });
+        let data = self
+            .musicu_lyric_request(
+                "GetPlayLyricInfo",
+                "music.musichallSong.PlayLyricInfo",
+                param,
+                cookie_header,
+            )
+            .await?;
+
+        let encrypted = data
+            .get("lyric")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| AppError::NotFound("qrc lyric is empty".into()))?;
+        let lyric_timestamp_exists = timestamp_nonzero(data.get("qrc_t")).unwrap_or(false)
+            || timestamp_nonzero(data.get("lrc_t")).unwrap_or(false);
+        if !lyric_timestamp_exists {
+            return Err(AppError::NotFound("qrc lyric timestamp is empty".into()));
+        }
+
+        let decrypted = qrc::decrypt_cloud_qrc(encrypted)
+            .map_err(|error| AppError::internal(format!("qrc decrypt failed: {error}")))?;
+        let lines = qrc::parse_qrc_lines(&decrypted);
+        if lines.is_empty() {
+            return Err(AppError::NotFound("qrc lyric has no timed lines".into()));
+        }
+
+        Ok(LyricsResp {
+            songmid: songmid.to_string(),
+            source: LyricSource::Qrc,
+            lyric: qrc::lines_to_lrc(&lines),
+            lines,
+        })
+    }
+
+    async fn lrc_lyrics(&self, songmid: &str, cookie_header: Option<&str>) -> LyricsResp {
+        let lyric = self.lyric(songmid, cookie_header).await.unwrap_or_default();
+        let lines = qrc::parse_lrc_lines(&lyric);
+        let source = if lyric.trim().is_empty() {
+            LyricSource::None
+        } else {
+            LyricSource::Lrc
+        };
+        LyricsResp {
+            songmid: songmid.to_string(),
+            source,
+            lyric,
+            lines,
+        }
+    }
+
+    async fn musicu_lyric_request(
+        &self,
+        method: &str,
+        module: &str,
+        param: Value,
+        cookie_header: Option<&str>,
+    ) -> Result<Value, AppError> {
+        let session = self
+            .lyric_session
+            .get_or_try_init(|| async { self.fetch_lyric_session(cookie_header).await })
+            .await?;
+        let comm = lyric_comm(Some(session));
+        self.post_musicu_lyric(comm, method, module, param, cookie_header).await
+    }
+
+    async fn fetch_lyric_session(&self, cookie_header: Option<&str>) -> Result<LyricSession, AppError> {
+        let data = self
+            .post_musicu_lyric(
+                lyric_comm(None),
+                "GetSession",
+                "music.getSession.session",
+                json!({ "caller": 0, "uid": "0", "vkey": 0 }),
+                cookie_header,
+            )
+            .await?;
+        let session = data.get("session").ok_or_else(|| AppError::Upstream {
+            status: StatusCode::BAD_GATEWAY,
+            body: "missing qq lyric session".into(),
+        })?;
+        Ok(LyricSession {
+            uid: string_or_number(session.get("uid")).unwrap_or_else(|| "0".to_string()),
+            sid: str_at(session, &["sid"]).unwrap_or("").to_string(),
+            userip: str_at(session, &["userip"]).unwrap_or("").to_string(),
+        })
+    }
+
+    async fn post_musicu_lyric(
+        &self,
+        comm: Value,
+        method: &str,
+        module: &str,
+        param: Value,
+        cookie_header: Option<&str>,
+    ) -> Result<Value, AppError> {
+        let body = json!({
+            "comm": comm,
+            "request": {
+                "method": method,
+                "module": module,
+                "param": param,
+            },
+        });
+        let mut builder = self
+            .client
+            .post(MUSICU)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::USER_AGENT, "okhttp/3.14.9")
+            .body(body.to_string());
+        if let Some(cookie) = cookie_header.filter(|value| !value.trim().is_empty()) {
+            builder = builder.header(header::COOKIE, cookie);
+        } else {
+            builder = builder.header(header::COOKIE, "tmeLoginType=-1;");
+        }
+
+        let resp = builder.send().await?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(AppError::Upstream {
+                status: StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+                body: text,
+            });
+        }
+
+        let data: Value = serde_json::from_str(&text)?;
+        let root_code = data.get("code").and_then(Value::as_i64).unwrap_or(-1);
+        let request_code = data.pointer("/request/code").and_then(Value::as_i64).unwrap_or(-1);
+        if root_code != 0 || request_code != 0 {
+            return Err(AppError::Upstream {
+                status: StatusCode::BAD_GATEWAY,
+                body: text,
+            });
+        }
+        data.pointer("/request/data")
+            .cloned()
+            .ok_or_else(|| AppError::Upstream {
+                status: StatusCode::BAD_GATEWAY,
+                body: "missing qq lyric response data".into(),
+            })
+    }
+
     pub fn audio_request(&self, url: &str) -> RequestBuilder {
         self.with_qq_headers(self.client.get(url), None)
     }
@@ -428,6 +643,45 @@ impl QqClient {
         }
         Ok(resp.json::<Value>().await?)
     }
+}
+
+fn lyric_comm(session: Option<&LyricSession>) -> Value {
+    let mut comm = json!({
+        "ct": 11,
+        "cv": "1003006",
+        "v": "1003006",
+        "os_ver": "15",
+        "phonetype": "24122RKC7C",
+        "rom": "Redmi/miro/miro:15/AE3A.240806.005/OS2.0.105.0.VOMCNXM:user/release-keys",
+        "tmeAppID": "qqmusiclight",
+        "nettype": "NETWORK_WIFI",
+        "udid": "0",
+    });
+    if let Some(session) = session {
+        comm["uid"] = Value::String(session.uid.clone());
+        comm["sid"] = Value::String(session.sid.clone());
+        comm["userip"] = Value::String(session.userip.clone());
+    }
+    comm
+}
+
+fn timestamp_nonzero(value: Option<&Value>) -> Option<bool> {
+    let value = value?;
+    if let Some(number) = value.as_i64() {
+        return Some(number != 0);
+    }
+    if let Some(text) = value.as_str() {
+        return Some(text != "0" && !text.trim().is_empty());
+    }
+    None
+}
+
+fn string_or_number(value: Option<&Value>) -> Option<String> {
+    let value = value?;
+    if let Some(text) = value.as_str() {
+        return Some(text.to_string());
+    }
+    value.as_i64().map(|number| number.to_string())
 }
 
 pub fn qq_uin_from_cookie(cookie_header: &str) -> Option<String> {

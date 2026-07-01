@@ -10,7 +10,7 @@ import { PlayerBar } from "./components/PlayerBar";
 import { PlaylistView } from "./components/PlaylistView";
 import { SearchView } from "./components/SearchView";
 import { Sidebar } from "./components/Sidebar";
-import type { AuthStatusResp, PlaylistDetailResp, PlaylistDto, SearchResp, SongDto } from "./types/domain";
+import type { AuthStatusResp, LyricsResp, PlaylistDetailResp, PlaylistDto, SearchResp, SongDto } from "./types/domain";
 
 type View = "home" | "playlist" | "search";
 
@@ -37,7 +37,7 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [lastSong, setLastSong] = useState<SongDto | null>(null);
-  const [lyric, setLyric] = useState("");
+  const [lyrics, setLyrics] = useState<LyricsResp | null>(null);
   const [likedSongmids, setLikedSongmids] = useState<Set<string>>(() => new Set());
 
   const activeSnapshot = snapshot?.providerId === PROVIDER_ID ? snapshot : null;
@@ -61,20 +61,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!currentSong?.songmid) return;
+    if (!currentSong?.songmid) {
+      setLyrics(null);
+      return;
+    }
     let cancelled = false;
+    setLyrics(null);
     api
-      .lyrics(currentSong.songmid)
+      .lyrics(currentSong)
       .then((data) => {
-        if (!cancelled) setLyric(data.lyric);
+        if (!cancelled) setLyrics(data);
       })
       .catch(() => {
-        if (!cancelled) setLyric("");
+        if (!cancelled) setLyrics(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [currentSong?.songmid]);
+  }, [currentSong?.album, currentSong?.artist, currentSong?.durationMs, currentSong?.songId, currentSong?.songmid, currentSong?.title]);
 
   async function initialLoad(): Promise<void> {
     const [authData, recommendData] = await Promise.allSettled([api.authStatus(), api.recommendPlaylists()]);
@@ -300,7 +304,7 @@ export default function App() {
         <NowPlayingView
           snapshot={snapshot}
           current={currentSong}
-          lyric={lyric}
+          lyrics={lyrics}
           liked={currentSong ? likedSongmids.has(currentSong.songmid) : false}
           onClose={() => setNowPlayingOpen(false)}
           onToggle={togglePlay}

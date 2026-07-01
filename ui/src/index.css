@@ -8,6 +8,14 @@
   overflow-anchor: none;
 }
 
+.qq-lyrics-viewport {
+  scrollbar-width: none;
+}
+
+.qq-lyrics-viewport::-webkit-scrollbar {
+  display: none;
+}
+
 .qq-scrollbar::-webkit-scrollbar {
   width: 8px;
 }
@@ -15,6 +23,12 @@
 .qq-scrollbar::-webkit-scrollbar-thumb {
   background: rgb(82 82 82 / 0.75);
   border-radius: 999px;
+}
+
+.qq-disc-rotor {
+  animation: qq-disc-spin 18s linear infinite;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 @keyframes qq-disc-spin {

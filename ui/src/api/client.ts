@@ -7,6 +7,7 @@ import type {
   PlaylistDetailResp,
   RecommendPlaylistsResp,
   SearchResp,
+  SongDto,
 } from "../types/domain";
 
 const BASE = "/api/apps/qq-music";
@@ -65,7 +66,16 @@ export const api = {
   playlist: (id: string) => request<PlaylistDetailResp>(`/playlists/${encodeURIComponent(id)}`),
   search: (query: string, types = "songs,playlists", page = 1, limit = 30) =>
     request<SearchResp>(`/search${params({ query, types, page, limit })}`),
-  lyrics: (songmid: string) => request<LyricsResp>(`/lyrics/${encodeURIComponent(songmid)}`),
+  lyrics: (song: SongDto) =>
+    request<LyricsResp>(
+      `/lyrics/${encodeURIComponent(song.songmid)}${params({
+        songId: song.songId,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        durationMs: song.durationMs,
+      })}`,
+    ),
 };
 
 export function audioUrl(songmid: string): string {

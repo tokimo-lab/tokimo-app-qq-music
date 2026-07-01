@@ -101,5 +101,32 @@ pub struct RecommendPlaylistsResp {
 #[serde(rename_all = "camelCase")]
 pub struct LyricsResp {
     pub songmid: String,
+    pub source: LyricSource,
     pub lyric: String,
+    pub lines: Vec<LyricLineDto>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum LyricSource {
+    Qrc,
+    Lrc,
+    None,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricLineDto {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
+    pub words: Vec<LyricWordDto>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricWordDto {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
 }

@@ -15,6 +15,8 @@ export default defineApp({
     color: "#00d47e",
     windowType: "qq-music",
     defaultSize: { width: 1280, height: 850 },
+    titleBarStyle: "overlay",
+    fullBleed: true,
     category: "app",
   },
   mount(container, ctx): Dispose {
@@ -34,4 +36,3 @@ export default defineApp({
     return () => root.unmount();
   },
 });
-
