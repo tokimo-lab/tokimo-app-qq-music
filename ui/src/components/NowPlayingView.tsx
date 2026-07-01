@@ -78,7 +78,13 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
           <h1 className="text-2xl font-semibold">{current?.title ?? "QQ音乐"}</h1>
           <div className="mt-2 text-lg text-slate-600">{current?.artist ?? "未播放"}</div>
           <div className="relative mt-8 h-[340px]">
-            <div className="qq-scrollbar h-full overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-28 text-slate-500">
+            <div
+              className="qq-scrollbar h-full overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-28 text-slate-500"
+              style={{
+                WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)",
+                maskImage: "linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)",
+              }}
+            >
               {displayLines.map((line, index) => (
                 <p
                   key={`${line.timeMs}-${line.text}-${index}`}
@@ -93,8 +99,6 @@ export function NowPlayingView({ snapshot, current, lyric, onClose, onToggle, on
                 </p>
               ))}
             </div>
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/70 via-[#dcfbf8]/95 to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/70 via-[#dcfbf8]/95 to-transparent" />
           </div>
         </div>
       </main>
