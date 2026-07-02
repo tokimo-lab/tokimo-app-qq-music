@@ -17,7 +17,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { api } from "../api/client";
 import type { AudioQualitiesResp, AudioQualityDto, AudioQualityId, SongCommentsResp, SongDto } from "../types/domain";
 import { duration, shortCount } from "./format";
@@ -78,7 +78,7 @@ export function PlaybackModeControl(props: PlaybackMenusProps) {
         <Icon className={props.iconClass} />
       </button>
       {props.openMenu === "mode" && (
-        <Popover className="bottom-[calc(100%+14px)] left-1/2 w-[132px] -translate-x-1/2 bg-white p-2 text-[14px] text-neutral-900">
+        <Popover className="bottom-[calc(100%+14px)] left-1/2 w-[132px] -translate-x-1/2 bg-[#fff] p-2 text-[14px] text-[#111]">
           <ModeItem
             icon={<Shuffle className="h-4 w-4" />}
             label="随机播放"
@@ -123,6 +123,7 @@ export function PlaybackModeControl(props: PlaybackMenusProps) {
 
 export function VolumeControl(props: PlaybackMenusProps) {
   const volume = props.snapshot?.volume ?? 1;
+  const volumePercent = Math.round(volume * 100);
   const lastVolumeRef = useRef(volume > 0 ? volume : 0.6);
   useEffect(() => {
     if (volume > 0) lastVolumeRef.current = volume;
@@ -142,32 +143,85 @@ export function VolumeControl(props: PlaybackMenusProps) {
         <Icon className={props.iconClass} />
       </button>
       {props.openMenu === "volume" && (
-        <Popover className="bottom-[calc(100%+16px)] left-1/2 flex h-[210px] w-[74px] -translate-x-1/2 flex-col items-center justify-center gap-4 px-4 py-5 text-neutral-900">
-          <input
-            aria-label="音量"
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(volume * 100)}
-            className="h-[112px] w-2 accent-[#3d8cff] [writing-mode:vertical-lr]"
-            onChange={(event) => props.onSetVolume(Number(event.currentTarget.value) / 100)}
-          />
-          <div className="text-[18px] leading-none tabular-nums">{Math.round(volume * 100)}%</div>
+        <Popover className="qq-volume-popover bottom-[calc(100%+16px)] left-1/2 flex h-[238px] w-[72px] -translate-x-1/2 flex-col items-center rounded-[10px] bg-[#fff] pt-[21px] pb-[14px] text-[#111] shadow-[0_12px_30px_rgba(0,0,0,0.15)]">
+          <VolumeSlider volume={volume} onSetVolume={props.onSetVolume} />
+          <div className="mt-[12px] text-[16px] leading-none font-normal tabular-nums">{volumePercent}%</div>
           <button
             type="button"
-            className="flex h-7 w-7 cursor-pointer items-center justify-center text-neutral-500 hover:text-neutral-900"
+            className="mt-[30px] flex h-[18px] w-[18px] cursor-pointer items-center justify-center text-[#6f6f6f] hover:text-[#111]"
             onClick={(event) => {
               event.stopPropagation();
               props.onSetVolume(volume > 0 ? 0 : lastVolumeRef.current);
             }}
             aria-label={volume > 0 ? "静音" : "恢复音量"}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-[18px] w-[18px] stroke-[1.8]" />
           </button>
         </Popover>
       )}
     </span>
   );
+}
+
+function VolumeSlider({ volume, onSetVolume }: { volume: number; onSetVolume: (volume: number) => void }) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const clampedVolume = clampVolume(volume);
+  const volumePercent = Math.round(clampedVolume * 100);
+
+  function setFromPointer(clientY: number) {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.height <= 0) return;
+    onSetVolume(clampVolume((rect.bottom - clientY) / rect.height));
+  }
+
+  function handlePointer(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setFromPointer(event.clientY);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 0.1 : 0.02;
+    if (event.key === "ArrowUp" || event.key === "ArrowRight") {
+      event.preventDefault();
+      onSetVolume(clampVolume(clampedVolume + step));
+    } else if (event.key === "ArrowDown" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      onSetVolume(clampVolume(clampedVolume - step));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      onSetVolume(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      onSetVolume(1);
+    }
+  }
+
+  return (
+    <div
+      ref={trackRef}
+      className="qq-volume-slider"
+      role="slider"
+      tabIndex={0}
+      aria-label="音量"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={volumePercent}
+      onPointerDown={handlePointer}
+      onPointerMove={(event) => {
+        if (event.buttons === 1) setFromPointer(event.clientY);
+      }}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="qq-volume-slider__fill" style={{ height: `${volumePercent}%` }} />
+      <div className="qq-volume-slider__thumb" style={{ bottom: `${volumePercent}%` }} />
+    </div>
+  );
+}
+
+function clampVolume(value: number) {
+  return Math.min(1, Math.max(0, value));
 }
 
 export function QualityControl(props: PlaybackMenusProps) {
@@ -575,7 +629,7 @@ function useDrawerPresence(open: boolean) {
 
 function ModeItem({ icon, label, active: _active, onClick }: { icon: ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-md px-2 text-left text-neutral-900 hover:bg-black/5" onClick={onClick}>
+    <button type="button" className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-md px-2 text-left text-[#111] hover:bg-black/5" onClick={onClick}>
       {icon}
       <span>{label}</span>
     </button>
