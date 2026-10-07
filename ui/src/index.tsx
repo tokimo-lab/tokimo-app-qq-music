@@ -19,6 +19,11 @@ export default defineApp({
     fullBleed: true,
     category: "app",
   },
+  standalone: {
+    createWindow: (route) => ({ type: "qq-music", route }),
+    getRoute: (window) =>
+      window.type === "qq-music" ? (window.route ?? "/") : null,
+  },
   mount(container, ctx): Dispose {
     const root: Root = createRoot(container);
     const locale = ctx.locale.startsWith("zh") ? uiZhCN : uiEnUS;
