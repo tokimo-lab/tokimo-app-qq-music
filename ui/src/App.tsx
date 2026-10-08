@@ -260,7 +260,7 @@ export default function App() {
   }
 
   return (
-    <div className="relative flex h-full overflow-hidden bg-[#171717] text-neutral-100">
+    <div className="app-safe-area relative flex h-full overflow-hidden bg-[#171717] text-neutral-100">
       <Sidebar
         auth={auth}
         accountPlaylists={accountPlaylists}
