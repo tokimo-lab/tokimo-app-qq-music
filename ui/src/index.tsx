@@ -20,6 +20,7 @@ export default defineApp({
     category: "app",
   },
   standalone: {
+    background: "#171717",
     createWindow: (route) => ({ type: "qq-music", route }),
     getRoute: (window) =>
       window.type === "qq-music" ? (window.route ?? "/") : null,
